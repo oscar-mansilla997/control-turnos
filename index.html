@@ -480,6 +480,42 @@ function todayDDMMYYYY() {
   const d = new Date();
   return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function isoToDDMMYYYY(iso) {
+  if (!iso) return todayDDMMYYYY();
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+function ddmmyyyyToISO(fecha) {
+  if (!fecha) return todayISO();
+  const [d, m, y] = fecha.split('/');
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+// Convierte "DD/MM/YYYY" a un Date real, para poder ordenar y comparar turnos
+// aunque se hayan cargado fuera de orden (turnos viejos cargados después).
+function parseFechaDDMMYYYY(fecha) {
+  const [d, m, y] = (fecha || '').split('/').map(Number);
+  return new Date(y || 1970, (m || 1) - 1, d || 1);
+}
+// Orden dentro de un mismo día: Mañana, Tarde, Noche, y cualquier otro nombre al final.
+function horarioOrdenValor(horario) {
+  const h = (horario || '').trim().toLowerCase();
+  if (h.startsWith('mañ') || h.startsWith('man')) return 1;
+  if (h.startsWith('tar')) return 2;
+  if (h.startsWith('noc')) return 3;
+  return 4;
+}
+// El historial ordenado por fecha real (no por orden de carga), del más viejo al más nuevo.
+function historialCronologico() {
+  return [...state.historial].sort((a, b) => {
+    const diff = parseFechaDDMMYYYY(a.fecha) - parseFechaDDMMYYYY(b.fecha);
+    if (diff !== 0) return diff;
+    return horarioOrdenValor(a.horario) - horarioOrdenValor(b.horario);
+  });
+}
 
 /* ---------------------------------------------------------
    NAVEGACION / RENDER
@@ -555,7 +591,8 @@ function render() {
    VISTA: SIN TURNO ACTIVO
 --------------------------------------------------------- */
 function renderNoTurno() {
-  const ultimo = state.historial[0];
+  const cron = historialCronologico();
+  const ultimo = cron.length ? cron[cron.length - 1] : null;
   return `
     <div class="empty-state">
       <h2>No hay un turno en curso</h2>
@@ -566,7 +603,8 @@ function renderNoTurno() {
 }
 
 function openNuevoTurnoModal() {
-  const ultimo = state.historial[0];
+  const cron = historialCronologico();
+  const ultimo = cron.length ? cron[cron.length - 1] : null;
   const mangueras = allMangueras();
   const filasLecturas = mangueras.map(m => {
     const val = ultimo && ultimo.lecturas[m.id] ? ultimo.lecturas[m.id].final : 0;
@@ -591,6 +629,11 @@ function openNuevoTurnoModal() {
   })() : '';
 
   showModal('Iniciar nuevo turno', `
+    <div class="field">
+      <label>Fecha del turno</label>
+      <input type="date" id="nt_fecha" value="${todayISO()}">
+      <p style="font-size:12px; color:var(--text-faint); margin:6px 2px 0;">Cambiá esta fecha si estás cargando un turno de un día anterior.</p>
+    </div>
     <div class="field">
       <label>Turno (ej. Mañana, Tarde, Noche)</label>
       <input type="text" id="nt_horario" value="" placeholder="Mañana">
@@ -630,6 +673,8 @@ function toggleNuevoOperadorField(v) {
 }
 
 function confirmNuevoTurno() {
+  const fechaISO = document.getElementById('nt_fecha').value;
+  const fecha = isoToDDMMYYYY(fechaISO);
   const horario = document.getElementById('nt_horario').value.trim() || 'Turno';
   const horaInicio = document.getElementById('nt_horaInicio').value.trim() || nowHHMM();
   const dineroInicial = parseFloat(document.getElementById('nt_dineroInicial').value) || 0;
@@ -652,7 +697,7 @@ function confirmNuevoTurno() {
     : null;
   state.turnoActivo = {
     id: uid('t'),
-    fecha: todayDDMMYYYY(),
+    fecha,
     horario, horaInicio, horaFin: null,
     operador,
     dineroInicial,
@@ -1019,25 +1064,16 @@ function buildCierrePDF(turno) {
   return doc;
 }
 
-async function descargarCierrePDF(turnoId) {
+function descargarCierrePDF(turnoId) {
   const turno = state.historial.find(x => x.id === turnoId);
   if (!turno) return;
   try {
-    if (typeof window.claude === 'undefined' || !window.claude.use) {
-      alert('La descarga no está disponible en este visor.');
-      return;
-    }
-    const dl = await window.claude.use('downloads');
-    if (!dl) {
-      alert('La descarga no está disponible en este visor.');
-      return;
-    }
     const doc = buildCierrePDF(turno);
-    const blob = doc.output('blob');
     const filename = `cierre_${turno.fecha.replace(/\//g,'-')}_${(turno.horario||'turno').replace(/\s+/g,'_')}.pdf`;
-    await dl.save({ filename, data: blob });
+    doc.save(filename);
   } catch (e) {
     console.error('No se pudo generar o descargar el PDF', e);
+    alert('No se pudo generar el PDF.');
   }
 }
 
@@ -1111,6 +1147,7 @@ function renderHistorialVistaToggle() {
       <button class="${historialVista === 'tarjetas' ? 'active' : ''}" onclick="cambiarVistaHistorial('tarjetas')">Tarjetas</button>
       <button class="${historialVista === 'tabla' ? 'active' : ''}" onclick="cambiarVistaHistorial('tabla')">Tabla</button>
     </div>
+    <button class="btn-secondary" style="margin-bottom:12px;" onclick="descargarHistorialPDF()">📄 Descargar historial en PDF</button>
   `;
 }
 
@@ -1118,6 +1155,26 @@ function litrosTotalTurno(turno) {
   let total = 0;
   allMangueras().forEach(m => { total += litrosVendidos(turno, m.id); });
   return total;
+}
+
+// Suma vendido en el turno separado por unidad real (litros vs m³), para no
+// mezclar nafta/diésel (L) con GNC (m³) bajo el mismo número.
+function cantidadesPorUnidadTurno(turno) {
+  const porUnidad = { L: 0, m3: 0 };
+  allMangueras().forEach(m => {
+    const unidad = m.unidad === 'm3' ? 'm3' : 'L';
+    porUnidad[unidad] += litrosVendidos(turno, m.id);
+  });
+  return porUnidad;
+}
+
+// Texto legible para una fila de la tabla/PDF: "1.234,5 L", "45,0 m³",
+// o "1.234,5 L + 45,0 m³" si el turno tiene mezcla de ambas unidades.
+function textoCantidadUnidades(porUnidad) {
+  const partes = [];
+  if (porUnidad.L > 0) partes.push(cantidad(porUnidad.L) + ' L');
+  if (porUnidad.m3 > 0) partes.push(cantidad(porUnidad.m3) + ' m³');
+  return partes.length ? partes.join(' + ') : '0 L';
 }
 
 function numeroRomano(n) {
@@ -1137,14 +1194,10 @@ function numeroTurnoPorHorario(horario, ordenEnElDia) {
   return numeroRomano(ordenEnElDia);
 }
 
-function renderHistorialTabla() {
-  if (!state.historial.length) {
-    return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
-  }
-  // el historial guarda lo más nuevo primero; para el acumulado necesitamos orden cronológico
-  const cronologico = [...state.historial].slice().reverse();
-
-  // contar qué número de turno es cada uno dentro de su día (I, II, III...)
+// Arma las filas del historial agrupadas por día, en orden cronológico,
+// con el acumulado corrido. La usan tanto la tabla en pantalla como el PDF.
+function getFilasHistorialAgrupadas() {
+  const cronologico = historialCronologico();
   const contadorPorDia = {};
   let acumulado = 0;
   const filas = cronologico.map(t => {
@@ -1152,23 +1205,32 @@ function renderHistorialTabla() {
     const numTurno = numeroTurnoPorHorario(t.horario, contadorPorDia[t.fecha]);
     const tot = calcTotales(t);
     acumulado += tot.ventaSurtidores;
+    const porUnidad = cantidadesPorUnidadTurno(t);
     return {
       fecha: t.fecha,
       numTurno,
       horario: t.horario || '',
       operador: t.operador || '—',
       litros: litrosTotalTurno(t),
+      cantidadTexto: textoCantidadUnidades(porUnidad),
       venta: tot.ventaSurtidores,
       acumulado
     };
   });
 
-  // agrupar por día para poner una fila de subtotal al final de cada día
   const porDia = {};
   filas.forEach(f => {
     if (!porDia[f.fecha]) porDia[f.fecha] = [];
     porDia[f.fecha].push(f);
   });
+  return porDia;
+}
+
+function renderHistorialTabla() {
+  if (!state.historial.length) {
+    return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
+  }
+  const porDia = getFilasHistorialAgrupadas();
 
   const filasHtml = Object.keys(porDia).map(fecha => {
     const grupo = porDia[fecha];
@@ -1177,7 +1239,7 @@ function renderHistorialTabla() {
         <td>${f.fecha}</td>
         <td class="num">${f.numTurno}${f.horario ? ` <span style="color:var(--text-faint); font-weight:400;">(${f.horario})</span>` : ''}</td>
         <td>${f.operador}</td>
-        <td class="num">${cantidad(f.litros)}</td>
+        <td class="num">${f.cantidadTexto}</td>
         <td class="num">${money(f.venta)}</td>
         <td class="num">${money(f.acumulado)}</td>
       </tr>
@@ -1201,7 +1263,7 @@ function renderHistorialTabla() {
             <th>Fecha</th>
             <th>Turno</th>
             <th>Operador</th>
-            <th>Litros</th>
+            <th>Cantidad</th>
             <th>Venta $</th>
             <th>Acumulado $</th>
           </tr>
@@ -1214,11 +1276,83 @@ function renderHistorialTabla() {
   `;
 }
 
+/* PDF con la tabla completa del historial (todos los turnos, agrupados por día, con acumulado) */
+function buildHistorialPDF() {
+  const porDia = getFilasHistorialAgrupadas();
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+  const left = 36, pageH = doc.internal.pageSize.getHeight(), pageW = doc.internal.pageSize.getWidth();
+  const cols = { fecha: 36, turno: 110, operador: 175, litros: 320, venta: 400, acumulado: 480 };
+  let y = 44;
+
+  function header() {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text('Historial de turnos', left, y); y += 20;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text('Generado el ' + todayDDMMYYYY(), left, y); y += 18;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+    doc.text('Fecha', cols.fecha, y);
+    doc.text('Turno', cols.turno, y);
+    doc.text('Operador', cols.operador, y);
+    doc.text('Cantidad', cols.litros, y);
+    doc.text('Venta $', cols.venta, y);
+    doc.text('Acumulado $', cols.acumulado, y);
+    y += 6;
+    doc.setDrawColor(180); doc.line(left, y, pageW - left, y); y += 12;
+    doc.setFont('helvetica', 'normal');
+  }
+
+  function checkPageBreak() {
+    if (y > pageH - 50) {
+      doc.addPage();
+      y = 44;
+      header();
+    }
+  }
+
+  header();
+
+  Object.keys(porDia).forEach(fecha => {
+    const grupo = porDia[fecha];
+    grupo.forEach(f => {
+      checkPageBreak();
+      doc.setFontSize(8.5);
+      doc.text(f.fecha, cols.fecha, y);
+      doc.text(`${f.numTurno}${f.horario ? ' (' + f.horario + ')' : ''}`, cols.turno, y);
+      doc.text(f.operador, cols.operador, y, { maxWidth: 140 });
+      doc.text(f.cantidadTexto, cols.litros, y);
+      doc.text(money(f.venta), cols.venta, y);
+      doc.text(money(f.acumulado), cols.acumulado, y);
+      y += 14;
+    });
+    checkPageBreak();
+    const totalDia = grupo.reduce((a, f) => a + f.venta, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total del día', cols.operador, y);
+    doc.text(money(totalDia), cols.venta, y);
+    doc.text(money(grupo[grupo.length - 1].acumulado), cols.acumulado, y);
+    doc.setFont('helvetica', 'normal');
+    y += 18;
+  });
+
+  return doc;
+}
+
+function descargarHistorialPDF() {
+  if (!state.historial.length) return;
+  try {
+    const doc = buildHistorialPDF();
+    doc.save(`historial_turnos_${todayDDMMYYYY().replace(/\//g,'-')}.pdf`);
+  } catch (e) {
+    console.error('No se pudo generar o descargar el PDF del historial', e);
+  }
+}
+
 function renderHistorial() {
   if (!state.historial.length) {
     return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
   }
-  return state.historial.map(t => {
+  const ordenado = historialCronologico().slice().reverse(); // más nuevo primero
+  return ordenado.map(t => {
     const tot = calcTotales(t);
     const cls = tot.diferencia === 0 ? '' : (tot.diferencia < 0 ? 'bad' : 'good');
     const sign = tot.diferencia > 0 ? '+' : '';
