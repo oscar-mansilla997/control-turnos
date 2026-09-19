@@ -1127,6 +1127,16 @@ function numeroRomano(n) {
   return r || String(n);
 }
 
+// Mañana = I, Tarde = II, Noche = III (según el nombre del turno).
+// Si el turno tiene otro nombre, se numera según el orden en que se cargó ese día.
+function numeroTurnoPorHorario(horario, ordenEnElDia) {
+  const h = (horario || '').trim().toLowerCase();
+  if (h.startsWith('mañ') || h.startsWith('man')) return numeroRomano(1);
+  if (h.startsWith('tar')) return numeroRomano(2);
+  if (h.startsWith('noc')) return numeroRomano(3);
+  return numeroRomano(ordenEnElDia);
+}
+
 function renderHistorialTabla() {
   if (!state.historial.length) {
     return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
@@ -1139,12 +1149,13 @@ function renderHistorialTabla() {
   let acumulado = 0;
   const filas = cronologico.map(t => {
     contadorPorDia[t.fecha] = (contadorPorDia[t.fecha] || 0) + 1;
-    const numTurno = numeroRomano(contadorPorDia[t.fecha]);
+    const numTurno = numeroTurnoPorHorario(t.horario, contadorPorDia[t.fecha]);
     const tot = calcTotales(t);
     acumulado += tot.ventaSurtidores;
     return {
       fecha: t.fecha,
       numTurno,
+      horario: t.horario || '',
       operador: t.operador || '—',
       litros: litrosTotalTurno(t),
       venta: tot.ventaSurtidores,
@@ -1164,7 +1175,7 @@ function renderHistorialTabla() {
     const filasDia = grupo.map(f => `
       <tr>
         <td>${f.fecha}</td>
-        <td class="num">${f.numTurno}</td>
+        <td class="num">${f.numTurno}${f.horario ? ` <span style="color:var(--text-faint); font-weight:400;">(${f.horario})</span>` : ''}</td>
         <td>${f.operador}</td>
         <td class="num">${cantidad(f.litros)}</td>
         <td class="num">${money(f.venta)}</td>
