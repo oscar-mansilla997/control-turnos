@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Control de Turnos</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14181c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Control de Turnos">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181c;
+    --surface: #1d2227;
+    --surface-2: #262c32;
+    --surface-3: #2f363d;
+    --border: #363e46;
+    --text: #edeff2;
+    --text-dim: #9aa2ab;
+    --text-faint: #6b747d;
+    --accent: #f2a93b;
+    --accent-ink: #2a1c05;
+    --good: #57b57e;
+    --good-bg: #1c2b22;
+    --bad: #e3594d;
+    --bad-bg: #2c1c1a;
+    --neutral-bg: #23282d;
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f3f1ec;
+      --surface: #ffffff;
+      --surface-2: #fbf9f5;
+      --surface-3: #efece5;
+      --border: #ded9cd;
+      --text: #201c14;
+      --text-dim: #6a6357;
+      --text-faint: #938c7d;
+      --accent: #c97f1e;
+      --accent-ink: #ffffff;
+      --good: #2e8b52;
+      --good-bg: #e5f2e9;
+      --bad: #c43d33;
+      --bad-bg: #f7e6e4;
+      --neutral-bg: #efece5;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181c; --surface: #1d2227; --surface-2: #262c32; --surface-3: #2f363d;
+    --border: #363e46; --text: #edeff2; --text-dim: #9aa2ab; --text-faint: #6b747d;
+    --accent: #f2a93b; --accent-ink: #2a1c05; --good: #57b57e; --good-bg: #1c2b22;
+    --bad: #e3594d; --bad-bg: #2c1c1a; --neutral-bg: #23282d; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: 78px;
+    min-height: 100vh;
+  }
+  .num { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+  h1,h2,h3 { font-family: var(--font-display); margin: 0; }
+  button { font-family: var(--font-body); }
+  input, select { font-family: var(--font-body); }
+
+  /* top bar */
+  .topbar {
+    position: sticky; top:0; z-index: 20;
+    background: var(--bg);
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar .titlerow { display:flex; align-items:baseline; justify-content:space-between; }
+  .topbar h1 { font-size: 19px; font-weight:600; }
+  .topbar .sub { color: var(--text-dim); font-size: 13px; margin-top:2px; }
+  .status-pill {
+    font-size: 11px; padding: 4px 9px; border-radius: 20px;
+    background: var(--good-bg); color: var(--good); font-weight:600;
+    letter-spacing: .02em;
+  }
+  .status-pill.off { background: var(--surface-3); color: var(--text-faint); }
+
+  main { padding: 14px 16px 24px; max-width: 520px; margin: 0 auto; }
+
+  /* empty state */
+  .empty-state {
+    text-align:center; padding: 60px 20px; color: var(--text-dim);
+  }
+  .empty-state h2 { font-size: 20px; margin-bottom:8px; color: var(--text); }
+  .empty-state p { font-size: 14px; line-height:1.5; margin: 0 0 20px; }
+
+  /* hero diff */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 18px 18px;
+    margin-bottom: 12px;
+  }
+  .hero .label {
+    font-size: 12.5px; color: var(--text-dim); font-weight:500;
+  }
+  .hero .diff {
+    font-size: 44px; font-weight:700; line-height:1.05; margin-top: 4px;
+    display:flex; align-items:center; gap: 8px;
+  }
+  .hero .diff.good { color: var(--good); }
+  .hero .diff.bad { color: var(--bad); }
+  .hero .diff .arrow { font-size: 26px; }
+  .hero .diff-note { font-size: 12.5px; color: var(--text-dim); margin-top:4px; }
+  .alert-banner {
+    margin-top: 10px; padding: 9px 11px; border-radius: 9px;
+    background: var(--bad-bg); color: var(--bad); font-size: 13px; font-weight:600;
+    border: 1px solid var(--bad);
+  }
+  .bar-row { padding: 11px 14px; border-bottom:1px solid var(--border); }
+  .bar-row:last-child { border-bottom:none; }
+  .bar-row .bar-top { display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:6px; }
+  .bar-row .bar-top .bl { font-weight:500; }
+  .bar-row .bar-top .br { font-weight:600; }
+  .bar-track { background: var(--surface-3); border-radius: 6px; height: 9px; overflow:hidden; }
+  .bar-fill { height:100%; background: var(--accent); border-radius:6px; }
+  .kpi-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .kpi-box { background: var(--surface); border:1px solid var(--border); border-radius: 12px; padding: 12px 12px; }
+  .kpi-box .label { font-size:11.5px; color:var(--text-dim); }
+  .kpi-box .val { font-size:19px; font-weight:700; margin-top:3px; }
+
+  .stat-strip { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .stat-box {
+    background: var(--surface); border:1px solid var(--border); border-radius: 12px;
+    padding: 11px 10px;
+  }
+  .stat-box .label { font-size: 11px; color: var(--text-dim); }
+  .stat-box .val { font-size: 17px; font-weight:600; margin-top:3px; }
+
+  .section-title {
+    font-size: 13px; text-transform: none; color: var(--text-dim);
+    margin: 20px 2px 8px; font-weight: 600;
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow:hidden; margin-bottom: 10px;
+  }
+  .card-head {
+    padding: 10px 14px; background: var(--surface-2);
+    display:flex; justify-content:space-between; align-items:center;
+    font-weight:600; font-size: 14px; border-bottom: 1px solid var(--border);
+  }
+  .card-head .sub { font-weight:400; color: var(--text-dim); font-size: 12px; }
+
+  .manguera-row {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .manguera-row:last-child { border-bottom:none; }
+  .manguera-row .mr-top { display:flex; justify-content:space-between; align-items:center; }
+  .manguera-row .fuel { font-weight:600; font-size: 14px; }
+  .manguera-row .total { font-weight:600; font-size: 14px; color: var(--accent); }
+  .mr-fields { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field-mini label { display:block; font-size: 10.5px; color: var(--text-faint); margin-bottom: 2px; }
+  .field-mini input {
+    width:100%; min-width:0; background: var(--surface-2); border:1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 7px 8px; font-size: 13.5px;
+  }
+  .field-mini input:disabled { color: var(--text-dim); opacity:.75; }
+  .mr-total-row {
+    display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-dim);
+    padding-top:2px;
+  }
+  .mr-total-row .num { color: var(--text); font-weight:600; }
+
+  .row-line {
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .row-line:last-child { border-bottom:none; }
+  .row-line .l { color: var(--text-dim); }
+  .row-line .r { font-weight:600; }
+  .row-line .r.neg { color: var(--bad); }
+  .row-line .r.pos { color: var(--good); }
+
+  .mov-item { padding: 9px 14px; border-bottom:1px solid var(--border); }
+  .mov-item:last-child{ border-bottom:none; }
+  .mov-item .mv-top { display:flex; justify-content:space-between; font-size:14px; }
+  .mov-item .mv-concepto { font-weight:500; }
+  .mov-item .mv-monto { font-weight:600; }
+  .mov-item .mv-monto.retiro, .mov-item .mv-monto.gasto { color: var(--bad); }
+  .mov-item .mv-monto.debito { color: var(--text-dim); }
+  .mov-item .mv-monto.ingreso { color: var(--good); }
+  .mov-item .mv-meta { font-size: 11.5px; color: var(--text-faint); margin-top:2px; }
+  .mov-empty { padding: 16px 14px; color: var(--text-faint); font-size: 13px; text-align:center; }
+
+  .btn-row { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+  .btn.debito { color: var(--text-dim); }
+  .btn {
+    border:none; border-radius: 11px; padding: 12px 8px; font-size: 13px; font-weight:600;
+    cursor:pointer; text-align:center; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn.ingreso { color: var(--good); }
+  .btn.retiro, .btn.gasto { color: var(--bad); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink); border:none;
+    border-radius: 12px; padding: 14px; font-size: 15px; font-weight:700;
+    width:100%; cursor:pointer;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-secondary {
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 13px; font-size: 14px; font-weight:600;
+    width:100%; cursor:pointer; margin-top: 8px;
+  }
+  .btn-ghost {
+    background:none; border:none; color: var(--accent); font-weight:600; font-size:13px;
+    cursor:pointer; padding: 6px 0;
+  }
+  .btn-danger-ghost {
+    background:none; border:none; color: var(--bad); font-weight:600; font-size:12.5px;
+    cursor:pointer; padding: 4px 0;
+  }
+
+  .field { margin-bottom: 14px; }
+  .field label { display:block; font-size: 13px; color: var(--text-dim); margin-bottom: 5px; font-weight:500; }
+  .field input, .field select {
+    width:100%; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); padding: 12px 12px; font-size: 15px;
+  }
+  .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  /* bottom tabs */
+  .tabbar {
+    position: fixed; bottom:0; left:0; right:0; z-index: 30;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display:flex; padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  }
+  .tab {
+    flex:1; text-align:center; padding: 8px 4px 6px; background:none; border:none;
+    color: var(--text-faint); font-size: 11px; font-weight:600; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .tab .ic { font-size: 20px; }
+  .tab.active { color: var(--accent); }
+
+  /* modal */
+  .overlay {
+    position:fixed; inset:0; background: rgba(0,0,0,.55); z-index: 50;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .overlay.hidden { display:none; }
+  .modal {
+    background: var(--surface); border-radius: 18px 18px 0 0; width:100%; max-width: 520px;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); max-height: 88vh; overflow-y:auto;
+    border-top: 1px solid var(--border);
+  }
+  .modal h3 { font-size: 17px; margin-bottom: 14px; }
+  .modal-actions { display:flex; gap: 10px; margin-top: 6px; }
+  .modal-actions .btn-secondary { margin-top:0; }
+
+  .hist-item {
+    background: var(--surface); border:1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 8px; display:flex; justify-content:space-between;
+    align-items:center; cursor:pointer;
+  }
+  .hist-item .hi-left .date { font-weight:600; font-size:14.5px; }
+  .hist-item .hi-left .turno { font-size: 12.5px; color: var(--text-dim); margin-top:2px; }
+  .hist-item .hi-right { font-weight:700; font-size: 15px; text-align:right; }
+  .hist-item .hi-right .caret { display:block; font-size:11px; color:var(--text-faint); font-weight:400; margin-top:2px;}
+
+  .backlink { display:inline-flex; align-items:center; gap:5px; color: var(--accent); background:none;
+    border:none; font-weight:600; font-size: 14px; padding: 4px 0 12px; cursor:pointer; }
+
+  .surtidor-config { background: var(--surface); border:1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow:hidden; }
+  .sc-head { padding: 10px 14px; background: var(--surface-2); display:flex; justify-content:space-between; align-items:center; font-weight:600; border-bottom:1px solid var(--border); }
+  .sc-manguera { display:flex; justify-content:space-between; align-items:center; padding: 9px 14px; border-bottom:1px solid var(--border); font-size:14px; }
+  .sc-manguera:last-child{border-bottom:none;}
+
+  ::placeholder { color: var(--text-faint); }
+
+  .cam-btn {
+    background: var(--surface-2); border:1px solid var(--border); color: var(--text-dim);
+    border-radius: 8px; padding: 0 10px; font-size: 15px; cursor:pointer; line-height:1;
+  }
+  .field-mini-row { display:flex; gap:6px; align-items:stretch; }
+  .field-mini-row input { flex:1; min-width:0; }
+  .cam-wrap { position:relative; background:#000; border-radius:12px; overflow:hidden; }
+  .cam-video { width:100%; display:block; }
+  .cam-guide {
+    position:absolute; left:8%; right:8%; top:38%; bottom:38%;
+    border: 2px dashed rgba(255,255,255,.75); border-radius:8px; pointer-events:none;
+  }
+  .cam-status { font-size:13px; color:var(--text-dim); margin-top:10px; text-align:center; min-height:18px; }
+  .spinner {
+    display:inline-block; width:16px; height:16px; border-radius:50%;
+    border: 2px solid var(--text-faint); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite; vertical-align:middle; margin-right:6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="titlerow">
+    <h1 id="pageTitle">Control de turnos</h1>
+    <span id="statusPill" class="status-pill">Sin turno</span>
+  </div>
+  <div class="sub" id="pageSub">Estación de servicio</div>
+</div>
+
+<main id="app"></main>
+
+<div class="tabbar">
+  <button class="tab" data-tab="home" onclick="goTab('home')"><span class="ic">⛽</span>Inicio</button>
+  <button class="tab" data-tab="historial" onclick="goTab('historial')"><span class="ic">🗂️</span>Historial</button>
+  <button class="tab" data-tab="stats" onclick="goTab('stats')"><span class="ic">📊</span>Datos</button>
+  <button class="tab" data-tab="config" onclick="goTab('config')"><span class="ic">⚙️</span>Ajustes</button>
+</div>
+
+<div class="overlay hidden" id="overlay">
+  <div class="modal" id="modalBody"></div>
+</div>
+
+<div class="overlay hidden" id="camOverlay" style="z-index:60;">
+  <div class="modal" id="camModalBody"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script>
+/* ---------------------------------------------------------
+   ESTADO Y PERSISTENCIA
+--------------------------------------------------------- */
+const STORAGE_KEY = 'controlTurnos_v1';
+
+function seedState() {
+  return {
+    config: {
+      surtidores: [
+        { id:'s1', nombre:'Surtidor 1', mangueras:[
+          { id:'m1', combustible:'Nafta Súper', unidad:'L' },
+          { id:'m2', combustible:'Nafta Premium', unidad:'L' },
+          { id:'m3', combustible:'Diésel', unidad:'L' },
+        ]},
+        { id:'s2', nombre:'Surtidor 2', mangueras:[
+          { id:'m4', combustible:'Nafta Súper', unidad:'L' },
+          { id:'m5', combustible:'Diésel', unidad:'L' },
+        ]},
+      ],
+      precios: { 'Nafta Súper': 0, 'Nafta Premium': 0, 'Diésel': 0 },
+      operadores: [],
+      puenteHabilitado: false,
+      umbralAlerta: 5000
+    },
+    turnoActivo: null,
+    historial: []
+  };
+}
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return seedState();
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.config) return seedState();
+    if (!Array.isArray(parsed.config.operadores)) parsed.config.operadores = [];
+    if (typeof parsed.config.puenteHabilitado !== 'boolean') parsed.config.puenteHabilitado = false;
+    if (typeof parsed.config.umbralAlerta !== 'number') parsed.config.umbralAlerta = 5000;
+    return parsed;
+  } catch(e) {
+    console.error('No se pudo leer el almacenamiento local, iniciando con datos de ejemplo.', e);
+    return seedState();
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e) {
+    console.error('No se pudo guardar el estado local.', e);
+  }
+}
+
+// completar efectivoContado nulo (turno de ejemplo con diferencia 0)
+(function fixSeed(){
+  state.historial.forEach(t => {
+    if (t.efectivoContado === null) {
+      t.efectivoContado = calcTotales(t).esperado;
+    }
+  });
+})();
+
+/* ---------------------------------------------------------
+   HELPERS DE FORMATO Y CALCULO
+--------------------------------------------------------- */
+function money(n) {
+  const r = Math.round(n || 0);
+  const sign = r < 0 ? '-' : '';
+  return sign + '$' + Math.abs(r).toLocaleString('es-AR');
+}
+function cantidad(n) {
+  return (n || 0).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1});
+}
+function unidadDe(combustible) {
+  const m = allMangueras().find(mm => mm.combustible === combustible);
+  return (m && m.unidad) || 'L';
+}
+function allMangueras() {
+  const list = [];
+  state.config.surtidores.forEach(s => s.mangueras.forEach(m => list.push({...m, surtidorNombre: s.nombre, surtidorId: s.id})));
+  return list;
+}
+function mangueraInfo(id) {
+  return allMangueras().find(m => m.id === id);
+}
+
+function calcTotales(turno) {
+  const mangueras = allMangueras();
+  let ventaSurtidores = 0;
+  const porCombustible = {};
+  mangueras.forEach(m => {
+    const lec = turno.lecturas[m.id] || { inicial:0, final:0 };
+    const lit = Math.max(0, (lec.final||0) - (lec.inicial||0));
+    const precio = (turno.precios && turno.precios[m.combustible]) || 0;
+    const total = lit * precio;
+    ventaSurtidores += total;
+    if (!porCombustible[m.combustible]) porCombustible[m.combustible] = { litros:0, total:0, unidad: m.unidad || 'L' };
+    porCombustible[m.combustible].litros += lit;
+    porCombustible[m.combustible].total += total;
+  });
+  let ingresosOtros = 0, retiros = 0, gastos = 0, debito = 0;
+  (turno.movimientos||[]).forEach(mv => {
+    if (mv.tipo === 'ingreso') ingresosOtros += mv.monto;
+    else if (mv.tipo === 'retiro') retiros += mv.monto;
+    else if (mv.tipo === 'gasto') gastos += mv.monto;
+    else if (mv.tipo === 'debito') debito += mv.monto;
+  });
+  const esperado = (turno.dineroInicial||0) + ventaSurtidores + ingresosOtros - retiros - gastos - debito;
+  const contado = turno.efectivoContado;
+  const diferencia = (contado === null || contado === undefined) ? null : contado - esperado;
+
+  let puenteInfo = null;
+  if (turno.puente) {
+    const p = turno.puente || { inicial:0, final:0 };
+    const litPuente = Math.max(0, (p.final||0) - (p.inicial||0));
+    // suma total despachada por todas las mangueras (todas las unidades juntas,
+    // pensado para estaciones donde el puente mide el total del compresor)
+    let litSurtidoresTotal = 0;
+    allMangueras().forEach(m => { litSurtidoresTotal += litrosVendidos(turno, m.id); });
+    puenteInfo = {
+      litrosSurtidores: litSurtidoresTotal,
+      litrosPuente: litPuente,
+      diferencia: litSurtidoresTotal - litPuente
+    };
+  }
+
+  return { ventaSurtidores, porCombustible, ingresosOtros, retiros, gastos, debito, esperado, contado, diferencia, puenteInfo };
+}
+
+function litrosVendidos(turno, mangueraId) {
+  const lec = turno.lecturas[mangueraId] || {inicial:0, final:0};
+  return Math.max(0, (lec.final||0) - (lec.inicial||0));
+}
+
+function uid(prefix) {
+  return prefix + '_' + Math.random().toString(36).slice(2,9);
+}
+
+function nowHHMM() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function todayDDMMYYYY() {
+  const d = new Date();
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+/* ---------------------------------------------------------
+   NAVEGACION / RENDER
+--------------------------------------------------------- */
+let currentTab = 'home';
+let currentHistDetail = null;
+let lastClosedView = null; // holds a just-closed turno object to show its cierre report
+
+function goTab(tab) {
+  currentTab = tab;
+  currentHistDetail = null;
+  lastClosedView = null;
+  render();
+}
+
+function render() {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
+  const app = document.getElementById('app');
+  const pillEl = document.getElementById('statusPill');
+  const subEl = document.getElementById('pageSub');
+  const titleEl = document.getElementById('pageTitle');
+
+  if (lastClosedView) {
+    titleEl.textContent = 'Cierre de turno';
+    subEl.textContent = lastClosedView.fecha + ' · ' + lastClosedView.horario;
+    pillEl.textContent = 'Cerrado';
+    pillEl.className = 'status-pill off';
+    app.innerHTML = renderCierreReport(lastClosedView, true);
+    return;
+  }
+
+  if (currentTab === 'home') {
+    titleEl.textContent = 'Control de turnos';
+    if (state.turnoActivo) {
+      subEl.textContent = state.turnoActivo.fecha + ' · Turno ' + state.turnoActivo.horario + (state.turnoActivo.operador ? ' · ' + state.turnoActivo.operador : '');
+      pillEl.textContent = 'Turno activo';
+      pillEl.className = 'status-pill';
+      app.innerHTML = renderHome(state.turnoActivo);
+    } else {
+      subEl.textContent = 'Estación de servicio';
+      pillEl.textContent = 'Sin turno';
+      pillEl.className = 'status-pill off';
+      app.innerHTML = renderNoTurno();
+    }
+  } else if (currentTab === 'historial') {
+    titleEl.textContent = 'Historial de turnos';
+    subEl.textContent = state.historial.length + ' turnos cerrados';
+    pillEl.textContent = state.turnoActivo ? 'Turno activo' : 'Sin turno';
+    pillEl.className = state.turnoActivo ? 'status-pill' : 'status-pill off';
+    if (currentHistDetail) {
+      const t = state.historial.find(x => x.id === currentHistDetail);
+      app.innerHTML = renderCierreReport(t, false);
+    } else {
+      app.innerHTML = renderHistorial();
+    }
+  } else if (currentTab === 'stats') {
+    titleEl.textContent = 'Datos y estadísticas';
+    subEl.textContent = state.historial.length + ' turnos analizados';
+    pillEl.textContent = state.turnoActivo ? 'Turno activo' : 'Sin turno';
+    pillEl.className = state.turnoActivo ? 'status-pill' : 'status-pill off';
+    app.innerHTML = renderEstadisticas();
+  } else if (currentTab === 'config') {
+    titleEl.textContent = 'Ajustes';
+    subEl.textContent = 'Surtidores, precios y operadores';
+    pillEl.textContent = state.turnoActivo ? 'Turno activo' : 'Sin turno';
+    pillEl.className = state.turnoActivo ? 'status-pill' : 'status-pill off';
+    app.innerHTML = renderConfig();
+  }
+}
+
+/* ---------------------------------------------------------
+   VISTA: SIN TURNO ACTIVO
+--------------------------------------------------------- */
+function renderNoTurno() {
+  const ultimo = state.historial[0];
+  return `
+    <div class="empty-state">
+      <h2>No hay un turno en curso</h2>
+      <p>${ultimo ? 'El último cierre fue el ' + ultimo.fecha + ' (turno ' + ultimo.horario + '). Las lecturas finales de ese turno se van a usar como lecturas iniciales del nuevo.' : 'Cargá las lecturas iniciales de cada manguera para empezar.'}</p>
+      <button class="btn-primary" onclick="openNuevoTurnoModal()">Iniciar nuevo turno</button>
+    </div>
+  `;
+}
+
+function openNuevoTurnoModal() {
+  const ultimo = state.historial[0];
+  const mangueras = allMangueras();
+  const filasLecturas = mangueras.map(m => {
+    const val = ultimo && ultimo.lecturas[m.id] ? ultimo.lecturas[m.id].final : 0;
+    return `
+      <div class="field" style="margin-bottom:8px;">
+        <label>${m.surtidorNombre} · ${m.combustible} — lectura inicial</label>
+        <div class="field-mini-row">
+          <input type="number" step="0.1" id="li_${m.id}" value="${val}">
+          <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('li_${m.id}', null)">📷</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const filaPuente = state.config.puenteHabilitado ? (() => {
+    const val = ultimo && ultimo.puente ? ultimo.puente.final : 0;
+    return `
+      <div class="field" style="margin-bottom:8px;">
+        <label>Puente de medición (compresor) — lectura inicial</label>
+        <div class="field-mini-row">
+          <input type="number" step="0.1" id="pt_general" value="${val}">
+          <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('pt_general', null)">📷</button>
+        </div>
+      </div>`;
+  })() : '';
+
+  showModal('Iniciar nuevo turno', `
+    <div class="field">
+      <label>Turno (ej. Mañana, Tarde, Noche)</label>
+      <input type="text" id="nt_horario" value="" placeholder="Mañana">
+    </div>
+    <div class="field">
+      <label>Hora de inicio</label>
+      <input type="text" id="nt_horaInicio" value="${nowHHMM()}">
+    </div>
+    <div class="field">
+      <label>Operador</label>
+      <select id="nt_operador_select" onchange="toggleNuevoOperadorField(this.value)">
+        ${state.config.operadores.map(op => `<option value="${op}">${op}</option>`).join('')}
+        <option value="__nuevo__" ${state.config.operadores.length===0?'selected':''}>+ Agregar nuevo operador</option>
+      </select>
+    </div>
+    <div class="field" id="nt_operador_nuevo_wrap" style="${state.config.operadores.length?'display:none;':''}">
+      <label>Nombre del operador</label>
+      <input type="text" id="nt_operador_nuevo" placeholder="Nombre y apellido">
+    </div>
+    <div class="field">
+      <label>Dinero inicial de caja</label>
+      <input type="number" id="nt_dineroInicial" value="0">
+    </div>
+    <div class="section-title" style="margin-top:6px;">Lecturas iniciales (autocompletadas)</div>
+    ${filasLecturas}
+    ${filaPuente ? `<div class="section-title">Puente de medición (compresor)</div>${filaPuente}` : ''}
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmNuevoTurno()">Crear turno</button>
+    </div>
+  `);
+}
+
+function toggleNuevoOperadorField(v) {
+  const wrap = document.getElementById('nt_operador_nuevo_wrap');
+  if (wrap) wrap.style.display = (v === '__nuevo__') ? 'block' : 'none';
+}
+
+function confirmNuevoTurno() {
+  const horario = document.getElementById('nt_horario').value.trim() || 'Turno';
+  const horaInicio = document.getElementById('nt_horaInicio').value.trim() || nowHHMM();
+  const dineroInicial = parseFloat(document.getElementById('nt_dineroInicial').value) || 0;
+  const selectVal = document.getElementById('nt_operador_select').value;
+  let operador = selectVal;
+  if (selectVal === '__nuevo__') {
+    operador = document.getElementById('nt_operador_nuevo').value.trim();
+  }
+  if (!operador) operador = 'Sin asignar';
+  if (!state.config.operadores.includes(operador)) {
+    state.config.operadores.push(operador);
+  }
+  const lecturas = {};
+  allMangueras().forEach(m => {
+    const v = parseFloat(document.getElementById('li_' + m.id).value) || 0;
+    lecturas[m.id] = { inicial: v, final: v };
+  });
+  const puente = state.config.puenteHabilitado
+    ? { inicial: parseFloat(document.getElementById('pt_general').value) || 0, final: parseFloat(document.getElementById('pt_general').value) || 0 }
+    : null;
+  state.turnoActivo = {
+    id: uid('t'),
+    fecha: todayDDMMYYYY(),
+    horario, horaInicio, horaFin: null,
+    operador,
+    dineroInicial,
+    lecturas,
+    puente,
+    precios: { ...state.config.precios },
+    movimientos: [],
+    efectivoContado: null,
+    cerrado: false
+  };
+  saveState();
+  closeModal();
+  render();
+}
+
+/* ---------------------------------------------------------
+   VISTA: TURNO ACTIVO (HOME)
+--------------------------------------------------------- */
+function renderHeroInner(t) {
+  const diffKnown = t.diferencia !== null;
+  const diffClass = !diffKnown ? '' : (t.diferencia < 0 ? 'bad' : 'good');
+  const diffSign = !diffKnown ? '' : (t.diferencia > 0 ? '+' : '');
+  const diffArrow = !diffKnown ? '' : (t.diferencia < 0 ? '▼' : (t.diferencia > 0 ? '▲' : '●'));
+  const umbral = state.config.umbralAlerta || 0;
+  const excedida = diffKnown && umbral > 0 && Math.abs(t.diferencia) > umbral;
+  return `
+    <div class="label">Diferencia de caja</div>
+    <div class="diff ${diffClass}">
+      ${diffKnown ? `<span class="arrow">${diffArrow}</span><span class="num">${diffSign}${money(t.diferencia)}</span>` : `<span class="num" style="color:var(--text-faint); font-size:26px;">Falta contar efectivo</span>`}
+    </div>
+    <div class="diff-note">${diffKnown ? (t.diferencia === 0 ? 'La caja cierra exacta.' : (t.diferencia < 0 ? 'Falta dinero respecto de lo esperado.' : 'Sobra dinero respecto de lo esperado.')) : 'Cargá el efectivo contado para ver la diferencia.'}</div>
+    ${excedida ? `<div class="alert-banner">⚠️ Supera el límite configurado de ${money(umbral)}</div>` : ''}
+  `;
+}
+
+function renderHome(turno) {
+  const t = calcTotales(turno);
+
+  return `
+    <div class="hero" id="heroBlock">
+      ${renderHeroInner(t)}
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat-box"><div class="label">Venta turno</div><div class="val num">${money(t.ventaSurtidores)}</div></div>
+      <div class="stat-box"><div class="label">Caja esperada</div><div class="val num">${money(t.esperado)}</div></div>
+      <div class="stat-box"><div class="label">Caja real</div><div class="val num" id="statCajaReal">${t.contado===null||t.contado===undefined ? '—' : money(t.contado)}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span>Efectivo contado</span><span class="sub">al finalizar</span></div>
+      <div style="padding:12px 14px;">
+        <input type="number" inputmode="decimal" id="efectivoContadoInput" value="${turno.efectivoContado===null||turno.efectivoContado===undefined?'':turno.efectivoContado}"
+          placeholder="Ingresá el efectivo contado"
+          style="width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; color:var(--text); padding:12px; font-size:16px;"
+          oninput="updateEfectivo(this.value)">
+      </div>
+    </div>
+
+    <div class="section-title">Surtidores</div>
+    ${state.config.surtidores.map(s => renderSurtidorCard(s, turno)).join('')}
+
+    ${renderPuentesSection(turno, t)}
+
+    <div class="section-title">Caja — movimientos</div>
+    <div class="card">
+      ${turno.movimientos.length ? turno.movimientos.map(mv => `
+        <div class="mov-item">
+          <div class="mv-top">
+            <span class="mv-concepto">${mv.concepto}</span>
+            <span class="mv-monto ${mv.tipo}">${mv.tipo==='ingreso'?'+':'-'}${money(mv.monto)}</span>
+          </div>
+          <div class="mv-meta" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>${mv.hora} · ${mv.usuario} · ${labelTipo(mv.tipo)}</span>
+            <button class="btn-danger-ghost" style="padding:2px 0;" onclick="confirmarEliminarMovimiento('${mv.id}')">Borrar</button>
+          </div>
+        </div>
+      `).join('') : `<div class="mov-empty">Todavía no hay movimientos cargados.</div>`}
+    </div>
+    <div class="btn-row">
+      <button class="btn ingreso" onclick="openMovModal('ingreso')">+ Ingreso</button>
+      <button class="btn retiro" onclick="openMovModal('retiro')">+ Retiro</button>
+      <button class="btn gasto" onclick="openMovModal('gasto')">+ Gasto</button>
+      <button class="btn debito" onclick="openMovModal('debito')">+ Débito / tarjeta</button>
+    </div>
+
+    <div class="section-title">Resumen de caja</div>
+    <div class="card">
+      <div class="row-line"><span class="l">Dinero inicial</span><span class="r num">${money(turno.dineroInicial)}</span></div>
+      <div class="row-line"><span class="l">Ventas por surtidores</span><span class="r num pos">${money(t.ventaSurtidores)}</span></div>
+      <div class="row-line"><span class="l">Otros ingresos</span><span class="r num pos">${money(t.ingresosOtros)}</span></div>
+      <div class="row-line"><span class="l">Retiros de caja</span><span class="r num neg">-${money(t.retiros)}</span></div>
+      <div class="row-line"><span class="l">Gastos</span><span class="r num neg">-${money(t.gastos)}</span></div>
+      <div class="row-line"><span class="l">Débito / tarjeta</span><span class="r num neg">-${money(t.debito)}</span></div>
+      <div class="row-line"><span class="l" style="font-weight:600; color:var(--text);">Dinero esperado</span><span class="r num">${money(t.esperado)}</span></div>
+    </div>
+
+    <button class="btn-primary" style="margin-top:16px;" onclick="confirmarCierre()">Cerrar turno</button>
+  `;
+}
+
+function labelTipo(tipo) {
+  return tipo === 'ingreso' ? 'Ingreso' : tipo === 'retiro' ? 'Retiro' : tipo === 'debito' ? 'Débito / tarjeta' : 'Gasto';
+}
+
+function renderSurtidorCard(surtidor, turno) {
+  return `
+    <div class="card">
+      <div class="card-head"><span>${surtidor.nombre}</span></div>
+      ${surtidor.mangueras.map(m => {
+        const lec = turno.lecturas[m.id] || {inicial:0, final:0};
+        const lit = litrosVendidos(turno, m.id);
+        const precio = turno.precios[m.combustible] || 0;
+        const total = lit * precio;
+        return `
+          <div class="manguera-row">
+            <div class="mr-top">
+              <span class="fuel">${m.combustible}</span>
+              <span class="total num">${money(total)}</span>
+            </div>
+            <div class="mr-fields">
+              <div class="field-mini">
+                <label>Inicial</label>
+                <div class="field-mini-row">
+                  <input type="number" step="0.1" id="lec_inicial_${m.id}" value="${lec.inicial}" onchange="updateLectura('${m.id}','inicial',this.value)">
+                  <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('lec_inicial_${m.id}', (v)=>updateLectura('${m.id}','inicial',v))">📷</button>
+                </div>
+              </div>
+              <div class="field-mini">
+                <label>Final</label>
+                <div class="field-mini-row">
+                  <input type="number" step="0.1" id="lec_final_${m.id}" value="${lec.final}" onchange="updateLectura('${m.id}','final',this.value)">
+                  <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('lec_final_${m.id}', (v)=>updateLectura('${m.id}','final',v))">📷</button>
+                </div>
+              </div>
+            </div>
+            <div class="mr-total-row">
+              <span>${m.unidad === 'm3' ? 'm³ vendidos' : 'Litros vendidos'}</span>
+              <span class="num">${cantidad(lit)} ${m.unidad === 'm3' ? 'm³' : 'L'}</span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderPuentesSection(turno, t) {
+  if (!state.config.puenteHabilitado) return '';
+  const p = turno.puente || { inicial:0, final:0 };
+  const info = t.puenteInfo || { litrosSurtidores:0, litrosPuente:0, diferencia:0 };
+  const diffCls = info.diferencia === 0 ? 'good' : 'bad';
+  return `
+    <div class="section-title">Puente de medición (compresor)</div>
+    <div class="card">
+      <div class="manguera-row">
+        <div class="mr-top"><span class="fuel">Lectura del compresor</span></div>
+        <div class="mr-fields">
+          <div class="field-mini">
+            <label>Inicial</label>
+            <div class="field-mini-row">
+              <input type="number" step="0.1" id="puente_inicial" value="${p.inicial}" onchange="updatePuenteLectura('inicial',this.value)">
+              <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('puente_inicial', (v)=>updatePuenteLectura('inicial',v))">📷</button>
+            </div>
+          </div>
+          <div class="field-mini">
+            <label>Final</label>
+            <div class="field-mini-row">
+              <input type="number" step="0.1" id="puente_final" value="${p.final}" onchange="updatePuenteLectura('final',this.value)">
+              <button type="button" class="cam-btn" title="Leer con la cámara" onclick="openCameraOCR('puente_final', (v)=>updatePuenteLectura('final',v))">📷</button>
+            </div>
+          </div>
+        </div>
+        <div class="mr-total-row">
+          <span>Total leído</span>
+          <span class="num">${cantidad(info.litrosPuente)}</span>
+        </div>
+      </div>
+      <div class="row-line">
+        <span class="l">Suma de mangueras: ${cantidad(info.litrosSurtidores)}</span>
+        <span class="r num" style="color:${diffCls==='bad'?'var(--bad)':'var(--good)'};">${info.diferencia===0?'Sin diferencia':(info.diferencia>0?'+':'')+cantidad(info.diferencia)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function updatePuenteLectura(campo, valor) {
+  const v = parseFloat(valor);
+  if (!state.turnoActivo.puente) state.turnoActivo.puente = { inicial:0, final:0 };
+  state.turnoActivo.puente[campo] = isNaN(v) ? 0 : v;
+  saveState();
+  render();
+}
+
+/* ---------------------------------------------------------
+   LECTURA POR CÁMARA (OCR) — opción alternativa a la carga manual.
+   Corre en este dominio propio (no dentro de la sandbox de claude.ai),
+   así que el navegador puede pedir permiso de cámara normalmente.
+   Nunca carga un número solo: siempre pide confirmar/corregir antes
+   de aplicarlo. Si algo falla (permiso, cámara, librería), se avisa
+   y la carga manual sigue funcionando igual que siempre.
+--------------------------------------------------------- */
+let camStream = null;
+let camTargetInputId = null;
+let camApplyFn = null;
+
+function closeCamModal() {
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  const overlay = document.getElementById('camOverlay');
+  const body = document.getElementById('camModalBody');
+  if (overlay) overlay.classList.add('hidden');
+  if (body) body.innerHTML = '';
+  camTargetInputId = null;
+  camApplyFn = null;
+}
+
+async function openCameraOCR(targetInputId, applyFn) {
+  camTargetInputId = targetInputId;
+  camApplyFn = applyFn || null;
+  const overlay = document.getElementById('camOverlay');
+  const body = document.getElementById('camModalBody');
+  if (!overlay || !body) return;
+
+  body.innerHTML = `
+    <h3>Leer con la cámara</h3>
+    <div class="cam-wrap">
+      <video id="camVideo" class="cam-video" autoplay playsinline muted></video>
+      <div class="cam-guide"></div>
+    </div>
+    <div class="cam-status" id="camStatus">Encendiendo la cámara…</div>
+    <div class="modal-actions" id="camActions">
+      <button class="btn-secondary" onclick="closeCamModal()">Cancelar</button>
+    </div>
+  `;
+  overlay.classList.remove('hidden');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setCamStatus('Este navegador no permite usar la cámara acá. Cargá el número a mano.');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+    if (overlay.classList.contains('hidden')) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    camStream = stream;
+    const video = document.getElementById('camVideo');
+    if (!video) { stream.getTracks().forEach(t => t.stop()); camStream = null; return; }
+    video.srcObject = stream;
+    setCamStatus('Encuadrá el número dentro del recuadro y sacá la foto.');
+    const actions = document.getElementById('camActions');
+    if (actions) actions.innerHTML = `
+      <button class="btn-secondary" onclick="closeCamModal()">Cancelar</button>
+      <button class="btn-primary" onclick="capturarYLeer()">📸 Sacar foto</button>
+    `;
+  } catch (e) {
+    console.error('No se pudo acceder a la cámara', e);
+    setCamStatus('No se pudo acceder a la cámara (revisá los permisos del sitio). Cargá el número a mano.');
+  }
+}
+
+function setCamStatus(html) {
+  const el = document.getElementById('camStatus');
+  if (el) el.innerHTML = html;
+}
+
+async function capturarYLeer() {
+  const video = document.getElementById('camVideo');
+  const actions = document.getElementById('camActions');
+  if (!video || !video.videoWidth) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const cropX = canvas.width * 0.08;
+  const cropY = canvas.height * 0.38;
+  const cropW = canvas.width * 0.84;
+  const cropH = canvas.height * 0.24;
+  const cropCanvas = document.createElement('canvas');
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  cropCanvas.getContext('2d').drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+
+  const wrap = document.querySelector('#camModalBody .cam-wrap');
+  if (wrap) wrap.style.display = 'none';
+  setCamStatus('<span class="spinner"></span>Leyendo el número…');
+  if (actions) actions.innerHTML = `<button class="btn-secondary" onclick="closeCamModal()">Cancelar</button>`;
+
+  try {
+    if (typeof Tesseract === 'undefined') throw new Error('OCR no disponible en este momento');
+    const result = await Tesseract.recognize(cropCanvas, 'eng');
+    const rawText = (result && result.data && result.data.text) || '';
+    const numero = extraerNumeroDeTexto(rawText);
+    mostrarResultadoOCR(numero);
+  } catch (e) {
+    console.error('Error al leer el número con la cámara', e);
+    setCamStatus('No se pudo leer el número automáticamente esta vez. Podés volver a intentar o cargarlo a mano.');
+    const actionsEl = document.getElementById('camActions');
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn-secondary" onclick="closeCamModal()">Cargar a mano</button>
+      <button class="btn-primary" onclick="reintentarCaptura()">Volver a intentar</button>
+    `;
+  }
+}
+
+function extraerNumeroDeTexto(text) {
+  if (!text) return '';
+  const conSeparador = text.match(/\d[\d.,]{1,}\d/g) || [];
+  const candidatos = conSeparador.length ? conSeparador : (text.match(/\d+/g) || []);
+  if (!candidatos.length) return '';
+  candidatos.sort((a, b) => b.replace(/[^\d]/g, '').length - a.replace(/[^\d]/g, '').length);
+  let best = candidatos[0];
+  if (best.includes(',')) {
+    best = best.replace(/\./g, '').replace(',', '.');
+  } else {
+    const partes = best.split('.');
+    if (partes.length > 2 || (partes.length === 2 && partes[1].length > 2)) {
+      best = best.replace(/\./g, '');
+    }
+  }
+  const n = parseFloat(best);
+  return isNaN(n) ? '' : String(n);
+}
+
+function mostrarResultadoOCR(numero) {
+  const status = document.getElementById('camStatus');
+  const actions = document.getElementById('camActions');
+  if (!status || !actions) return;
+  status.innerHTML = numero
+    ? 'Revisá el número antes de guardarlo — corregilo si hace falta:'
+    : 'No se pudo reconocer un número. Escribilo manualmente:';
+
+  let resultField = document.getElementById('camResultField');
+  if (!resultField) {
+    const div = document.createElement('div');
+    div.className = 'field';
+    div.style.marginTop = '10px';
+    div.innerHTML = `<input type="number" step="0.1" id="camResultField" inputmode="decimal"
+      style="width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; color:var(--text); padding:12px; font-size:22px; text-align:center; font-family:var(--font-display); font-weight:700;" placeholder="0">`;
+    status.insertAdjacentElement('afterend', div);
+    resultField = document.getElementById('camResultField');
+  }
+  resultField.value = numero;
+  resultField.focus();
+  actions.innerHTML = `
+    <button class="btn-secondary" onclick="reintentarCaptura()">Volver a sacar foto</button>
+    <button class="btn-primary" onclick="confirmarResultadoOCR()">Usar este número</button>
+  `;
+}
+
+function reintentarCaptura() {
+  openCameraOCR(camTargetInputId, camApplyFn);
+}
+
+function confirmarResultadoOCR() {
+  const resultField = document.getElementById('camResultField');
+  const val = resultField ? resultField.value.trim() : '';
+  if (val === '' || isNaN(parseFloat(val))) {
+    alert('Ingresá un número válido antes de continuar.');
+    return;
+  }
+  if (camApplyFn) {
+    camApplyFn(val);
+  } else if (camTargetInputId) {
+    const input = document.getElementById(camTargetInputId);
+    if (input) input.value = val;
+  }
+  closeCamModal();
+}
+
+function updateLectura(mangueraId, campo, valor) {
+  const v = parseFloat(valor);
+  if (!state.turnoActivo.lecturas[mangueraId]) state.turnoActivo.lecturas[mangueraId] = {inicial:0, final:0};
+  state.turnoActivo.lecturas[mangueraId][campo] = isNaN(v) ? 0 : v;
+  saveState();
+  render();
+}
+
+function updateEfectivo(valor) {
+  const v = parseFloat(valor);
+  state.turnoActivo.efectivoContado = valor === '' ? null : (isNaN(v) ? null : v);
+  saveState();
+  // actualización parcial: no reconstruimos todo el DOM para no perder
+  // el foco ni caracteres mientras la persona sigue escribiendo.
+  const t = calcTotales(state.turnoActivo);
+  const heroEl = document.getElementById('heroBlock');
+  const statEl = document.getElementById('statCajaReal');
+  if (heroEl) heroEl.innerHTML = renderHeroInner(t);
+  if (statEl) statEl.textContent = (t.contado === null || t.contado === undefined) ? '—' : money(t.contado);
+}
+
+/* movimientos de caja */
+function openMovModal(tipo) {
+  const titulo = tipo === 'ingreso' ? 'Registrar ingreso' : tipo === 'retiro' ? 'Registrar retiro' : tipo === 'debito' ? 'Registrar venta con débito/tarjeta' : 'Registrar gasto';
+  showModal(titulo, `
+    <div class="field">
+      <label>Monto</label>
+      <input type="number" id="mv_monto" placeholder="0" autofocus>
+    </div>
+    <div class="field">
+      <label>Concepto</label>
+      <input type="text" id="mv_concepto" placeholder="${tipo==='ingreso'?'Ej. Venta de aceite':tipo==='retiro'?'Ej. Retiro para depósito':tipo==='debito'?'Ej. Pagos con tarjeta de débito':'Ej. Compra de insumos'}">
+    </div>
+    <div class="field">
+      <label>Hora</label>
+      <input type="text" id="mv_hora" value="${nowHHMM()}">
+    </div>
+    <div class="field">
+      <label>Operador</label>
+      ${state.config.operadores.length ? `
+      <select id="mv_usuario">
+        ${state.config.operadores.map(op => `<option value="${op}" ${op === state.turnoActivo.operador ? 'selected' : ''}>${op}</option>`).join('')}
+      </select>` : `<input type="text" id="mv_usuario" value="${state.turnoActivo.operador || ''}">`}
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmMovimiento('${tipo}')">Guardar</button>
+    </div>
+  `);
+}
+
+function confirmMovimiento(tipo) {
+  const monto = parseFloat(document.getElementById('mv_monto').value) || 0;
+  const concepto = document.getElementById('mv_concepto').value.trim() || labelTipo(tipo);
+  const hora = document.getElementById('mv_hora').value.trim() || nowHHMM();
+  const usuario = document.getElementById('mv_usuario').value.trim() || state.turnoActivo.operador || 'Operador';
+  state.turnoActivo.movimientos.push({ id: uid('mv'), tipo, monto, concepto, hora, usuario });
+  saveState();
+  closeModal();
+  render();
+}
+
+function confirmarEliminarMovimiento(id) {
+  const mv = state.turnoActivo.movimientos.find(m => m.id === id);
+  if (!mv) return;
+  showModal('Borrar movimiento', `
+    <p style="color:var(--text-dim); font-size:14px; line-height:1.5; margin-top:0;">
+      Vas a borrar "${mv.concepto}" — ${labelTipo(mv.tipo)} de ${money(mv.monto)} (${mv.hora}). Esto va a recalcular la caja esperada. No se puede deshacer.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" style="background:var(--bad); color:#fff;" onclick="eliminarMovimiento('${id}')">Borrar</button>
+    </div>
+  `);
+}
+
+function eliminarMovimiento(id) {
+  state.turnoActivo.movimientos = state.turnoActivo.movimientos.filter(m => m.id !== id);
+  saveState();
+  closeModal();
+  render();
+}
+
+/* cierre de turno */
+function confirmarCierre() {
+  const t = calcTotales(state.turnoActivo);
+  const contadoTxt = t.contado === null || t.contado === undefined ? 'Todavía no cargaste el efectivo contado. ' : '';
+  const umbral = state.config.umbralAlerta || 0;
+  const excedida = t.diferencia !== null && umbral > 0 && Math.abs(t.diferencia) > umbral;
+  showModal('Cerrar turno', `
+    ${excedida ? `<div class="alert-banner" style="margin-top:0; margin-bottom:14px;">⚠️ La diferencia (${money(t.diferencia)}) supera el límite configurado de ${money(umbral)}. Revisala antes de cerrar.</div>` : ''}
+    <p style="color:var(--text-dim); font-size:14px; line-height:1.5; margin-top:0;">
+      ${contadoTxt}Se va a guardar el cierre de este turno en el historial. Las lecturas finales quedarán disponibles como lecturas iniciales del próximo turno. Esta acción no se puede deshacer.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="cerrarTurno()">Confirmar cierre</button>
+    </div>
+  `);
+}
+
+function cerrarTurno() {
+  const t = state.turnoActivo;
+  t.cerrado = true;
+  t.horaFin = t.horaFin || nowHHMM();
+  state.historial.unshift(t);
+  state.turnoActivo = null;
+  saveState();
+  closeModal();
+  lastClosedView = t;
+  currentTab = 'home';
+  render();
+}
+
+/* ---------------------------------------------------------
+   CIERRE / INFORME (reutilizado en cierre reciente e historial)
+--------------------------------------------------------- */
+/* ---------------------------------------------------------
+   DESCARGA DE PDF (cierre de turno)
+--------------------------------------------------------- */
+function buildCierrePDF(turno) {
+  const t = calcTotales(turno);
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+  const left = 40, right = 400;
+  let y = 50;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text('Cierre de turno', left, y); y += 24;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(`Fecha: ${turno.fecha}    Turno: ${turno.horario}`, left, y); y += 16;
+  doc.text(`Horario: ${turno.horaInicio || '—'} a ${turno.horaFin || '—'}`, left, y); y += 16;
+  doc.text(`Operador: ${turno.operador || '—'}`, left, y); y += 26;
+
+  doc.setFont('helvetica', 'bold'); doc.text('Combustible vendido', left, y); y += 16;
+  doc.setFont('helvetica', 'normal');
+  Object.keys(t.porCombustible).forEach(c => {
+    const info = t.porCombustible[c];
+    const unidad = info.unidad === 'm3' ? 'm³' : 'L';
+    doc.text(`${c} — ${cantidad(info.litros)} ${unidad}`, left, y);
+    doc.text(money(info.total), right, y);
+    y += 15;
+  });
+  doc.setFont('helvetica', 'bold');
+  doc.text('Total combustible', left, y); doc.text(money(t.ventaSurtidores), right, y); y += 28;
+
+  doc.text('Caja', left, y); y += 16;
+  doc.setFont('helvetica', 'normal');
+  [
+    ['Inicial', money(turno.dineroInicial)],
+    ['Ingresos (ventas + otros)', money(t.ventaSurtidores + t.ingresosOtros)],
+    ['Retiros', '-' + money(t.retiros)],
+    ['Otros gastos', '-' + money(t.gastos)],
+    ['Débito / tarjeta', '-' + money(t.debito)],
+  ].forEach(([l, r]) => { doc.text(l, left, y); doc.text(r, right, y); y += 15; });
+  doc.setFont('helvetica', 'bold');
+  doc.text('Efectivo esperado', left, y); doc.text(money(t.esperado), right, y); y += 15;
+  doc.text('Efectivo contado', left, y); doc.text(t.contado == null ? '—' : money(t.contado), right, y); y += 28;
+
+  if (t.puenteInfo) {
+    doc.text('Puente de medición (compresor)', left, y); y += 16;
+    doc.setFont('helvetica', 'normal');
+    doc.text('Suma de mangueras', left, y); doc.text(cantidad(t.puenteInfo.litrosSurtidores), right, y); y += 15;
+    doc.text('Lectura del compresor', left, y); doc.text(cantidad(t.puenteInfo.litrosPuente), right, y); y += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Diferencia puente', left, y);
+    doc.text(t.puenteInfo.diferencia === 0 ? '0' : cantidad(t.puenteInfo.diferencia), right, y); y += 28;
+  }
+
+  doc.setFontSize(14);
+  doc.text('Diferencia de caja', left, y);
+  doc.text(t.diferencia === null ? '—' : money(t.diferencia), right, y); y += 20;
+
+  return doc;
+}
+
+async function descargarCierrePDF(turnoId) {
+  const turno = state.historial.find(x => x.id === turnoId);
+  if (!turno) return;
+  try {
+    if (typeof window.claude === 'undefined' || !window.claude.use) {
+      alert('La descarga no está disponible en este visor.');
+      return;
+    }
+    const dl = await window.claude.use('downloads');
+    if (!dl) {
+      alert('La descarga no está disponible en este visor.');
+      return;
+    }
+    const doc = buildCierrePDF(turno);
+    const blob = doc.output('blob');
+    const filename = `cierre_${turno.fecha.replace(/\//g,'-')}_${(turno.horario||'turno').replace(/\s+/g,'_')}.pdf`;
+    await dl.save({ filename, data: blob });
+  } catch (e) {
+    console.error('No se pudo generar o descargar el PDF', e);
+  }
+}
+
+function renderCierreReport(turno, isFresh) {
+  const t = calcTotales(turno);
+  const combustibles = Object.keys(t.porCombustible);
+  const diffClass = t.diferencia === 0 ? '' : (t.diferencia < 0 ? 'bad' : 'good');
+
+  return `
+    ${isFresh ? '' : `<button class="backlink" onclick="currentHistDetail=null; render();">‹ Volver al historial</button>`}
+    <div class="card">
+      <div class="card-head"><span>Cierre de turno</span><span class="sub">${turno.fecha} · ${turno.horario}</span></div>
+      <div class="row-line"><span class="l">Horario</span><span class="r">${turno.horaInicio || '—'} a ${turno.horaFin || '—'}</span></div>
+      <div class="row-line"><span class="l">Operador</span><span class="r">${turno.operador || '—'}</span></div>
+    </div>
+
+    <div class="section-title">Combustible vendido</div>
+    <div class="card">
+      ${combustibles.map(c => `
+        <div class="row-line">
+          <span class="l">${c} — ${cantidad(t.porCombustible[c].litros)} ${t.porCombustible[c].unidad === 'm3' ? 'm³' : 'L'}</span>
+          <span class="r num">${money(t.porCombustible[c].total)}</span>
+        </div>
+      `).join('')}
+      <div class="row-line"><span class="l" style="font-weight:600; color:var(--text);">Total combustible</span><span class="r num" style="color:var(--accent);">${money(t.ventaSurtidores)}</span></div>
+    </div>
+
+    <div class="section-title">Caja</div>
+    <div class="card">
+      <div class="row-line"><span class="l">Inicial</span><span class="r num">${money(turno.dineroInicial)}</span></div>
+      <div class="row-line"><span class="l">Ingresos (ventas + otros)</span><span class="r num pos">${money(t.ventaSurtidores + t.ingresosOtros)}</span></div>
+      <div class="row-line"><span class="l">Retiros</span><span class="r num neg">-${money(t.retiros)}</span></div>
+      <div class="row-line"><span class="l">Otros gastos</span><span class="r num neg">-${money(t.gastos)}</span></div>
+      <div class="row-line"><span class="l">Débito / tarjeta</span><span class="r num neg">-${money(t.debito)}</span></div>
+      <div class="row-line"><span class="l" style="font-weight:600; color:var(--text);">Efectivo esperado</span><span class="r num">${money(t.esperado)}</span></div>
+      <div class="row-line"><span class="l" style="font-weight:600; color:var(--text);">Efectivo contado</span><span class="r num">${t.contado===null||t.contado===undefined?'—':money(t.contado)}</span></div>
+    </div>
+
+    ${t.puenteInfo ? `
+    <div class="section-title">Puente de medición (compresor)</div>
+    <div class="card">
+      <div class="row-line"><span class="l">Suma de mangueras</span><span class="r num">${cantidad(t.puenteInfo.litrosSurtidores)}</span></div>
+      <div class="row-line"><span class="l">Lectura del compresor</span><span class="r num">${cantidad(t.puenteInfo.litrosPuente)}</span></div>
+      <div class="row-line"><span class="l" style="font-weight:600; color:var(--text);">Diferencia</span><span class="r num" style="color:${t.puenteInfo.diferencia===0?'var(--good)':'var(--bad)'};">${t.puenteInfo.diferencia===0?'Sin diferencia':(t.puenteInfo.diferencia>0?'+':'')+cantidad(t.puenteInfo.diferencia)}</span></div>
+    </div>` : ''}
+
+    <div class="hero" style="margin-top:12px;">
+      <div class="label">Diferencia</div>
+      <div class="diff ${diffClass}"><span class="num">${t.diferencia===null?'—':(t.diferencia>0?'+':'')+money(t.diferencia)}</span></div>
+      ${(state.config.umbralAlerta > 0 && t.diferencia !== null && Math.abs(t.diferencia) > state.config.umbralAlerta) ? `<div class="alert-banner">⚠️ Superó el límite configurado de ${money(state.config.umbralAlerta)}</div>` : ''}
+    </div>
+
+    <button class="btn-secondary" style="margin-top:16px;" onclick="descargarCierrePDF('${turno.id}')">📄 Descargar PDF</button>
+    ${isFresh ? `<button class="btn-primary" style="margin-top:8px;" onclick="lastClosedView=null; currentTab='home'; render();">Ir al inicio</button>
+    <button class="btn-secondary" onclick="lastClosedView=null; openNuevoTurnoModal();">Iniciar el próximo turno</button>` : ''}
+  `;
+}
+
+/* ---------------------------------------------------------
+   HISTORIAL
+--------------------------------------------------------- */
+function renderHistorial() {
+  if (!state.historial.length) {
+    return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
+  }
+  return state.historial.map(t => {
+    const tot = calcTotales(t);
+    const cls = tot.diferencia === 0 ? '' : (tot.diferencia < 0 ? 'bad' : 'good');
+    const sign = tot.diferencia > 0 ? '+' : '';
+    const umbral = state.config.umbralAlerta || 0;
+    const excedida = umbral > 0 && Math.abs(tot.diferencia) > umbral;
+    return `
+      <div class="hist-item" onclick="verHistorialDetalle('${t.id}')">
+        <div class="hi-left">
+          <div class="date">${excedida ? '⚠️ ' : ''}${t.fecha} — Turno ${t.horario}</div>
+          <div class="turno">${t.horaInicio || ''}${t.horaFin ? ' a ' + t.horaFin : ''}${t.operador ? ' · ' + t.operador : ''} · ${money(tot.ventaSurtidores)} vendido</div>
+        </div>
+        <div class="hi-right"><span class="num ${cls}" style="color:${cls==='bad'?'var(--bad)':cls==='good'?'var(--good)':'var(--text)'}">${tot.diferencia===0?'':sign}${money(tot.diferencia)}</span><span class="caret">ver detalle ›</span></div>
+      </div>
+    `;
+  }).join('');
+}
+
+function verHistorialDetalle(id) {
+  currentHistDetail = id;
+  render();
+}
+
+/* ---------------------------------------------------------
+   CONFIG
+--------------------------------------------------------- */
+/* ---------------------------------------------------------
+   ESTADÍSTICAS
+--------------------------------------------------------- */
+function computeStats() {
+  const turnos = state.historial; // más nuevo primero
+  const result = {
+    n: turnos.length,
+    ventaTotal: 0,
+    ingresosOtrosTotal: 0,
+    debitoTotal: 0,
+    diferenciaValues: [],
+    excedidos: 0,
+    porHorario: {},
+    porCombustible: {},
+    porOperador: {}
+  };
+  turnos.forEach(t => {
+    const tot = calcTotales(t);
+    result.ventaTotal += tot.ventaSurtidores;
+    result.ingresosOtrosTotal += tot.ingresosOtros;
+    result.debitoTotal += tot.debito;
+    if (tot.diferencia !== null) {
+      result.diferenciaValues.push(tot.diferencia);
+      if (state.config.umbralAlerta > 0 && Math.abs(tot.diferencia) > state.config.umbralAlerta) result.excedidos++;
+    }
+    const horario = t.horario || 'Turno';
+    if (!result.porHorario[horario]) result.porHorario[horario] = { venta:0, count:0 };
+    result.porHorario[horario].venta += tot.ventaSurtidores;
+    result.porHorario[horario].count += 1;
+
+    Object.keys(tot.porCombustible).forEach(c => {
+      if (!result.porCombustible[c]) result.porCombustible[c] = { litros:0, total:0, unidad: tot.porCombustible[c].unidad };
+      result.porCombustible[c].litros += tot.porCombustible[c].litros;
+      result.porCombustible[c].total += tot.porCombustible[c].total;
+    });
+
+    const op = t.operador || 'Sin asignar';
+    if (!result.porOperador[op]) result.porOperador[op] = { valores: [] };
+    if (tot.diferencia !== null) result.porOperador[op].valores.push(tot.diferencia);
+  });
+
+  const diffs = result.diferenciaValues;
+  const promedioGeneral = diffs.length ? diffs.reduce((a,b)=>a+b,0)/diffs.length : 0;
+  const promedioAbsGeneral = diffs.length ? diffs.reduce((a,b)=>a+Math.abs(b),0)/diffs.length : 0;
+  result.promedioGeneral = promedioGeneral;
+  result.promedioAbsGeneral = promedioAbsGeneral;
+
+  Object.keys(result.porOperador).forEach(op => {
+    const vals = result.porOperador[op].valores;
+    result.porOperador[op].promedio = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+    result.porOperador[op].promedioAbs = vals.length ? vals.reduce((a,b)=>a+Math.abs(b),0)/vals.length : 0;
+    result.porOperador[op].count = vals.length;
+  });
+
+  // tendencia: promedio |diferencia| de la mitad reciente vs. la mitad más vieja
+  let tendencia = 'estable';
+  if (diffs.length >= 4) {
+    const mitad = Math.floor(diffs.length/2);
+    const recientes = diffs.slice(0, mitad);
+    const viejos = diffs.slice(mitad);
+    const avgAbs = arr => arr.length ? arr.reduce((a,b)=>a+Math.abs(b),0)/arr.length : 0;
+    const avgRecientes = avgAbs(recientes);
+    const avgViejos = avgAbs(viejos);
+    if (avgViejos > 0) {
+      if (avgRecientes > avgViejos * 1.3) tendencia = 'empeorando';
+      else if (avgRecientes < avgViejos * 0.7) tendencia = 'mejorando';
+    }
+  }
+  result.tendencia = tendencia;
+
+  return result;
+}
+
+function bar(pct, colorVar) {
+  const p = Math.max(2, Math.min(100, pct));
+  return `<div class="bar-track"><div class="bar-fill" style="width:${p}%; background:${colorVar || 'var(--accent)'};"></div></div>`;
+}
+
+function renderEstadisticas() {
+  if (!state.historial.length) {
+    return `<div class="empty-state"><h2>Todavía no hay datos suficientes</h2><p>Cuando cierres algunos turnos, acá vas a ver qué franja horaria vende más, cuánto se vendió de cada combustible, y cómo viene la diferencia de caja por operador.</p></div>`;
+  }
+  const s = computeStats();
+  const totalFacturado = s.ventaTotal + s.ingresosOtrosTotal;
+  const pctDebito = totalFacturado > 0 ? (s.debitoTotal / (totalFacturado + s.debitoTotal)) * 100 : 0;
+
+  const horarios = Object.keys(s.porHorario).sort((a,b) => s.porHorario[b].venta - s.porHorario[a].venta);
+  const maxVentaHorario = Math.max(...horarios.map(h => s.porHorario[h].venta), 1);
+
+  const combustibles = Object.keys(s.porCombustible).sort((a,b) => s.porCombustible[b].total - s.porCombustible[a].total);
+  const maxVentaCombustible = Math.max(...combustibles.map(c => s.porCombustible[c].total), 1);
+
+  const operadores = Object.keys(s.porOperador).sort((a,b) => s.porOperador[b].promedioAbs - s.porOperador[a].promedioAbs);
+
+  const tendenciaTexto = s.tendencia === 'empeorando'
+    ? '⚠️ La diferencia de caja se viene agravando en los últimos turnos.'
+    : s.tendencia === 'mejorando'
+      ? '✅ La diferencia de caja viene mejorando respecto de turnos anteriores.'
+      : 'Sin cambios significativos en la tendencia últimamente.';
+
+  return `
+    <div class="kpi-grid">
+      <div class="kpi-box"><div class="label">Turnos analizados</div><div class="val num">${s.n}</div></div>
+      <div class="kpi-box"><div class="label">Venta total combustible</div><div class="val num">${money(s.ventaTotal)}</div></div>
+      <div class="kpi-box"><div class="label">Diferencia promedio</div><div class="val num" style="color:${s.promedioGeneral<0?'var(--bad)':s.promedioGeneral>0?'var(--good)':'var(--text)'};">${money(s.promedioGeneral)}</div></div>
+      <div class="kpi-box"><div class="label">Turnos con alerta</div><div class="val num" style="color:${s.excedidos>0?'var(--bad)':'var(--text)'};">${s.excedidos}</div></div>
+    </div>
+
+    <div class="card" style="padding:12px 14px; margin-bottom:14px;">
+      <div style="font-size:13.5px; font-weight:600;">Tendencia reciente</div>
+      <p style="font-size:13px; color:var(--text-dim); margin:6px 0 0; line-height:1.45;">${tendenciaTexto}</p>
+    </div>
+
+    <div class="section-title" style="margin-top:0;">Venta por franja horaria</div>
+    <div class="card">
+      ${horarios.map(h => `
+        <div class="bar-row">
+          <div class="bar-top"><span class="bl">${h} <span style="color:var(--text-faint); font-weight:400;">(${s.porHorario[h].count} turnos)</span></span><span class="br num">${money(s.porHorario[h].venta)}</span></div>
+          ${bar(s.porHorario[h].venta / maxVentaHorario * 100)}
+        </div>
+      `).join('')}
+    </div>
+    <p style="font-size:12px; color:var(--text-faint); margin: -4px 2px 14px;">La franja con la barra más larga es la que más vende en total.</p>
+
+    <div class="section-title">Venta por combustible</div>
+    <div class="card">
+      ${combustibles.map(c => `
+        <div class="bar-row">
+          <div class="bar-top"><span class="bl">${c} <span style="color:var(--text-faint); font-weight:400;">(${cantidad(s.porCombustible[c].litros)} ${s.porCombustible[c].unidad === 'm3' ? 'm³' : 'L'})</span></span><span class="br num">${money(s.porCombustible[c].total)}</span></div>
+          ${bar(s.porCombustible[c].total / maxVentaCombustible * 100, 'var(--good)')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="section-title">Efectivo vs. tarjeta</div>
+    <div class="card" style="padding:12px 14px;">
+      <div class="bar-top" style="margin-bottom:8px;"><span class="bl">Pagado con débito/tarjeta</span><span class="br num">${pctDebito.toFixed(1)}%</span></div>
+      ${bar(pctDebito, 'var(--accent)')}
+      <p style="font-size:12px; color:var(--text-faint); margin:8px 0 0;">El resto se cobra en efectivo y pasa por la caja del turno.</p>
+    </div>
+
+    <div class="section-title">Diferencia promedio por operador</div>
+    <div class="card">
+      ${operadores.map(op => {
+        const d = s.porOperador[op];
+        const revisar = s.promedioAbsGeneral > 0 && d.promedioAbs > s.promedioAbsGeneral * 1.5 && d.count >= 2;
+        return `
+        <div class="row-line">
+          <span class="l">${revisar ? '⚠️ ' : ''}${op} <span style="color:var(--text-faint); font-size:12px;">(${d.count} turnos)</span></span>
+          <span class="r num" style="color:${d.promedio<0?'var(--bad)':d.promedio>0?'var(--good)':'var(--text)'};">${money(d.promedio)}</span>
+        </div>
+      `;
+      }).join('')}
+    </div>
+    <p style="font-size:12px; color:var(--text-faint); margin: -4px 2px 0;">⚠️ marca a quien se aleja bastante más de lo normal comparado con el resto del equipo — no significa necesariamente un error, pero conviene revisarlo.</p>
+  `;
+}
+
+function renderConfig() {
+  const combustibles = [...new Set(allMangueras().map(m => m.combustible))];
+  return `
+    <div class="section-title" style="margin-top:0;">Operadores</div>
+    <div class="card">
+      ${state.config.operadores.length ? state.config.operadores.map(op => `
+        <div class="row-line">
+          <span class="l">${op}</span>
+          <button class="btn-danger-ghost" onclick="eliminarOperador('${op.replace(/'/g,"\\'")}')">Quitar</button>
+        </div>
+      `).join('') : `<div class="mov-empty">Todavía no cargaste ningún operador.</div>`}
+      <div style="padding:10px 14px;">
+        <button class="btn-ghost" onclick="agregarOperadorModal()">+ Agregar operador</button>
+      </div>
+    </div>
+
+    <div class="section-title">Precios por litro</div>
+    <div class="card">
+      ${combustibles.map(c => `
+        <div class="row-line">
+          <span class="l">${c} <span style="color:var(--text-faint); font-size:12px;">($/${unidadDe(c) === 'm3' ? 'm³' : 'L'})</span></span>
+          <input type="number" value="${state.config.precios[c]||0}" onchange="updatePrecio('${c}', this.value)"
+            style="width:110px; text-align:right; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:7px 8px; font-size:14px;">
+        </div>
+      `).join('')}
+    </div>
+    <p style="font-size:12px; color:var(--text-faint); margin: -4px 2px 0;">Cambiar el precio acá actualiza los turnos futuros. El turno activo usa el precio que tenía guardado al iniciar.</p>
+
+    <div class="section-title">Puente de medición (compresor)</div>
+    <div class="card" style="padding:12px 14px;">
+      <label style="display:flex; align-items:center; gap:10px; font-size:14px; cursor:pointer;">
+        <input type="checkbox" ${state.config.puenteHabilitado?'checked':''} onchange="togglePuente(this.checked)">
+        Usar lectura general del compresor
+      </label>
+      <p style="font-size:12.5px; color:var(--text-faint); margin:8px 0 0; line-height:1.4;">Es una lectura más (inicial/final del turno), igual que una manguera, pero del medidor del compresor. Se compara contra la suma total de todas las mangueras del turno.</p>
+    </div>
+
+    <div class="section-title">Alerta de diferencia de caja</div>
+    <div class="card" style="padding:12px 14px;">
+      <label style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px; font-weight:500;">Avisar cuando la diferencia (a favor o en contra) supere:</label>
+      <input type="number" value="${state.config.umbralAlerta}" onchange="updateUmbralAlerta(this.value)"
+        style="width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; color:var(--text); padding:11px; font-size:15px;">
+      <p style="font-size:12px; color:var(--text-faint); margin:8px 0 0;">Poné 0 para desactivar la alerta.</p>
+    </div>
+
+    <div class="section-title">Surtidores y mangueras</div>
+    ${state.config.surtidores.map(s => `
+      <div class="surtidor-config">
+        <div class="sc-head">
+          <span>${s.nombre}</span>
+          <button class="btn-danger-ghost" onclick="eliminarSurtidor('${s.id}')">Eliminar</button>
+        </div>
+        ${s.mangueras.map(m => `
+          <div class="sc-manguera">
+            <span>${m.combustible} <span style="color:var(--text-faint); font-size:12px;">(${m.unidad === 'm3' ? 'm³' : 'L'})</span></span>
+            <button class="btn-danger-ghost" onclick="eliminarManguera('${s.id}','${m.id}')">Quitar</button>
+          </div>
+        `).join('') || `<div class="mov-empty">Sin mangueras cargadas.</div>`}
+        <div style="padding:10px 14px;">
+          <button class="btn-ghost" onclick="agregarManguera('${s.id}')">+ Agregar manguera</button>
+        </div>
+      </div>
+    `).join('')}
+    <button class="btn-secondary" onclick="agregarSurtidor()">+ Agregar surtidor</button>
+
+    <div class="section-title">Datos locales</div>
+    <div class="card" style="padding:12px 14px;">
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin:0 0 10px;">Todo se guarda únicamente en este dispositivo. Podés reiniciar el prototipo a los datos de ejemplo si necesitás empezar de nuevo.</p>
+      <button class="btn-danger-ghost" onclick="resetearDatos()">Reiniciar a datos de ejemplo</button>
+    </div>
+  `;
+}
+
+function agregarOperadorModal() {
+  showModal('Agregar operador', `
+    <div class="field">
+      <label>Nombre del operador</label>
+      <input type="text" id="op_nombre" placeholder="Nombre y apellido" autofocus>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmAgregarOperador()">Agregar</button>
+    </div>
+  `);
+}
+function confirmAgregarOperador() {
+  const nombre = document.getElementById('op_nombre').value.trim();
+  if (nombre && !state.config.operadores.includes(nombre)) {
+    state.config.operadores.push(nombre);
+    saveState();
+  }
+  closeModal();
+  render();
+}
+function eliminarOperador(nombre) {
+  state.config.operadores = state.config.operadores.filter(o => o !== nombre);
+  saveState();
+  render();
+}
+function updatePrecio(combustible, v) {
+  const val = parseFloat(v) || 0;
+  state.config.precios[combustible] = val;
+  saveState();
+}
+function updateUmbralAlerta(v) {
+  const val = parseFloat(v);
+  state.config.umbralAlerta = isNaN(val) ? 0 : Math.max(0, val);
+  saveState();
+  render();
+}
+function togglePuente(checked) {
+  state.config.puenteHabilitado = checked;
+  if (checked && state.turnoActivo && !state.turnoActivo.puente) {
+    state.turnoActivo.puente = { inicial: 0, final: 0 };
+  }
+  saveState();
+  render();
+}
+function agregarSurtidor() {
+  const n = state.config.surtidores.length + 1;
+  state.config.surtidores.push({ id: uid('s'), nombre: 'Surtidor ' + n, mangueras: [] });
+  saveState();
+  render();
+}
+function eliminarSurtidor(id) {
+  state.config.surtidores = state.config.surtidores.filter(s => s.id !== id);
+  saveState();
+  render();
+}
+function agregarManguera(surtidorId) {
+  showModal('Agregar manguera', `
+    <div class="field">
+      <label>Tipo de combustible</label>
+      <input type="text" id="mg_combustible" placeholder="Ej. GNC">
+    </div>
+    <div class="field">
+      <label>Unidad de medida</label>
+      <select id="mg_unidad">
+        <option value="L">Litros (L)</option>
+        <option value="m3">Metros cúbicos (m³) — típico en GNC</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Precio por unidad</label>
+      <input type="number" id="mg_precio" placeholder="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmAgregarManguera('${surtidorId}')">Agregar</button>
+    </div>
+  `);
+}
+function confirmAgregarManguera(surtidorId) {
+  const combustible = document.getElementById('mg_combustible').value.trim();
+  const unidad = document.getElementById('mg_unidad').value || 'L';
+  const precio = parseFloat(document.getElementById('mg_precio').value) || 0;
+  if (!combustible) { closeModal(); return; }
+  const surtidor = state.config.surtidores.find(s => s.id === surtidorId);
+  const id = uid('m');
+  surtidor.mangueras.push({ id, combustible, unidad });
+  if (!(combustible in state.config.precios)) state.config.precios[combustible] = precio;
+  if (state.turnoActivo) {
+    state.turnoActivo.lecturas[id] = { inicial: 0, final: 0 };
+    state.turnoActivo.precios[combustible] = state.config.precios[combustible];
+  }
+  saveState();
+  closeModal();
+  render();
+}
+function eliminarManguera(surtidorId, mangueraId) {
+  const surtidor = state.config.surtidores.find(s => s.id === surtidorId);
+  surtidor.mangueras = surtidor.mangueras.filter(m => m.id !== mangueraId);
+  saveState();
+  render();
+}
+function resetearDatos() {
+  showModal('Reiniciar datos', `
+    <p style="color:var(--text-dim); font-size:14px; line-height:1.5; margin-top:0;">Se van a borrar todos los turnos y la configuración actual, y se van a restaurar los datos de ejemplo. Esta acción no se puede deshacer.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmReset()">Reiniciar</button>
+    </div>
+  `);
+}
+function confirmReset() {
+  state = seedState();
+  saveState();
+  closeModal();
+  currentTab = 'home';
+  lastClosedView = null;
+  currentHistDetail = null;
+  render();
+}
+
+/* ---------------------------------------------------------
+   MODAL GENERICO
+--------------------------------------------------------- */
+function showModal(title, bodyHtml) {
+  document.getElementById('modalBody').innerHTML = `<h3>${title}</h3>${bodyHtml}`;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+function closeModal() {
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('modalBody').innerHTML = '';
+}
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'overlay') closeModal();
+});
+
+/* ---------------------------------------------------------
+   INICIO
+--------------------------------------------------------- */
+render();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(e => console.error('No se pudo registrar el service worker', e));
+  });
+}
+</script>
+</body>
+</html>
