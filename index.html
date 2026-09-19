@@ -282,6 +282,17 @@
   .hist-item .hi-right { font-weight:700; font-size: 15px; text-align:right; }
   .hist-item .hi-right .caret { display:block; font-size:11px; color:var(--text-faint); font-weight:400; margin-top:2px;}
 
+  .vista-toggle { display:flex; gap:6px; background: var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:3px; margin-bottom:12px; }
+  .vista-toggle button { flex:1; border:none; background:transparent; color: var(--text-dim); font-size:13.5px; font-weight:600; padding:8px 0; border-radius:8px; cursor:pointer; }
+  .vista-toggle button.active { background: var(--accent); color:#fff; }
+
+  .tabla-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:12px; -webkit-overflow-scrolling:touch; }
+  table.tabla-historial { border-collapse:collapse; width:100%; min-width:520px; font-size:12.5px; }
+  table.tabla-historial th { text-align:left; background: var(--surface-2); color: var(--text-dim); font-weight:600; padding:8px 10px; white-space:nowrap; position:sticky; top:0; }
+  table.tabla-historial td { padding:7px 10px; border-top:1px solid var(--border); white-space:nowrap; }
+  table.tabla-historial td.num, table.tabla-historial th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  table.tabla-historial tr.fila-subtotal td { background: var(--surface-2); font-weight:700; }
+
   .backlink { display:inline-flex; align-items:center; gap:5px; color: var(--accent); background:none;
     border:none; font-weight:600; font-size: 14px; padding: 4px 0 12px; cursor:pointer; }
 
@@ -476,6 +487,7 @@ function todayDDMMYYYY() {
 let currentTab = 'home';
 let currentHistDetail = null;
 let lastClosedView = null; // holds a just-closed turno object to show its cierre report
+let historialVista = 'tarjetas'; // 'tarjetas' | 'tabla'
 
 function goTab(tab) {
   currentTab = tab;
@@ -522,7 +534,7 @@ function render() {
       const t = state.historial.find(x => x.id === currentHistDetail);
       app.innerHTML = renderCierreReport(t, false);
     } else {
-      app.innerHTML = renderHistorial();
+      app.innerHTML = renderHistorialVistaToggle() + (historialVista === 'tabla' ? renderHistorialTabla() : renderHistorial());
     }
   } else if (currentTab === 'stats') {
     titleEl.textContent = 'Datos y estadísticas';
@@ -1087,6 +1099,110 @@ function renderCierreReport(turno, isFresh) {
 /* ---------------------------------------------------------
    HISTORIAL
 --------------------------------------------------------- */
+function cambiarVistaHistorial(v) {
+  historialVista = v;
+  render();
+}
+
+function renderHistorialVistaToggle() {
+  if (!state.historial.length) return '';
+  return `
+    <div class="vista-toggle">
+      <button class="${historialVista === 'tarjetas' ? 'active' : ''}" onclick="cambiarVistaHistorial('tarjetas')">Tarjetas</button>
+      <button class="${historialVista === 'tabla' ? 'active' : ''}" onclick="cambiarVistaHistorial('tabla')">Tabla</button>
+    </div>
+  `;
+}
+
+function litrosTotalTurno(turno) {
+  let total = 0;
+  allMangueras().forEach(m => { total += litrosVendidos(turno, m.id); });
+  return total;
+}
+
+function numeroRomano(n) {
+  const mapa = [[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let resto = n, r = '';
+  for (const [v, s] of mapa) { while (resto >= v) { r += s; resto -= v; } }
+  return r || String(n);
+}
+
+function renderHistorialTabla() {
+  if (!state.historial.length) {
+    return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
+  }
+  // el historial guarda lo más nuevo primero; para el acumulado necesitamos orden cronológico
+  const cronologico = [...state.historial].slice().reverse();
+
+  // contar qué número de turno es cada uno dentro de su día (I, II, III...)
+  const contadorPorDia = {};
+  let acumulado = 0;
+  const filas = cronologico.map(t => {
+    contadorPorDia[t.fecha] = (contadorPorDia[t.fecha] || 0) + 1;
+    const numTurno = numeroRomano(contadorPorDia[t.fecha]);
+    const tot = calcTotales(t);
+    acumulado += tot.ventaSurtidores;
+    return {
+      fecha: t.fecha,
+      numTurno,
+      operador: t.operador || '—',
+      litros: litrosTotalTurno(t),
+      venta: tot.ventaSurtidores,
+      acumulado
+    };
+  });
+
+  // agrupar por día para poner una fila de subtotal al final de cada día
+  const porDia = {};
+  filas.forEach(f => {
+    if (!porDia[f.fecha]) porDia[f.fecha] = [];
+    porDia[f.fecha].push(f);
+  });
+
+  const filasHtml = Object.keys(porDia).map(fecha => {
+    const grupo = porDia[fecha];
+    const filasDia = grupo.map(f => `
+      <tr>
+        <td>${f.fecha}</td>
+        <td class="num">${f.numTurno}</td>
+        <td>${f.operador}</td>
+        <td class="num">${cantidad(f.litros)}</td>
+        <td class="num">${money(f.venta)}</td>
+        <td class="num">${money(f.acumulado)}</td>
+      </tr>
+    `).join('');
+    const totalDia = grupo.reduce((a, f) => a + f.venta, 0);
+    const filaSubtotal = `
+      <tr class="fila-subtotal">
+        <td colspan="4">Total del día</td>
+        <td class="num">${money(totalDia)}</td>
+        <td class="num">${money(grupo[grupo.length - 1].acumulado)}</td>
+      </tr>
+    `;
+    return filasDia + filaSubtotal;
+  }).join('');
+
+  return `
+    <div class="tabla-wrap">
+      <table class="tabla-historial">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Turno</th>
+            <th>Operador</th>
+            <th>Litros</th>
+            <th>Venta $</th>
+            <th>Acumulado $</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filasHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderHistorial() {
   if (!state.historial.length) {
     return `<div class="empty-state"><h2>Sin turnos cerrados</h2><p>Cuando cierres un turno, va a aparecer acá con su diferencia de caja.</p></div>`;
