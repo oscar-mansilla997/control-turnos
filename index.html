@@ -288,8 +288,8 @@
 
   .tabla-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:12px; -webkit-overflow-scrolling:touch; }
   table.tabla-historial { border-collapse:collapse; width:100%; min-width:520px; font-size:12.5px; }
-  table.tabla-historial th { text-align:left; background: var(--surface-2); color: var(--text-dim); font-weight:600; padding:8px 10px; white-space:nowrap; position:sticky; top:0; }
-  table.tabla-historial td { padding:7px 10px; border-top:1px solid var(--border); white-space:nowrap; }
+  table.tabla-historial th { text-align:left; background: var(--surface-2); color: var(--text-dim); font-weight:600; padding:8px 10px; white-space:nowrap; position:sticky; top:0; border:1px solid var(--border); }
+  table.tabla-historial td { padding:7px 10px; border:1px solid var(--border); white-space:nowrap; }
   table.tabla-historial td.num, table.tabla-historial th.num { text-align:right; font-variant-numeric: tabular-nums; }
   table.tabla-historial tr.fila-subtotal td { background: var(--surface-2); font-weight:700; }
 
@@ -1634,10 +1634,12 @@ function renderHistorialTabla() {
         <td class="num">${money(f.venta)}</td>
         <td class="num">${money(f.debito)}</td>
         <td class="num">${money(f.neto)}</td>
-        <td class="num">${money(f.acumulado)}</td>
+        <td class="num"></td>
       </tr>
     `).join('');
     const totalDia = grupo.reduce((a, f) => a + f.neto, 0);
+    // El acumulado se muestra una sola vez por día, en la fila de subtotal:
+    // es la suma corrida desde el primer turno cargado hasta el último de este día.
     const filaSubtotal = `
       <tr class="fila-subtotal">
         <td colspan="6">Total del día</td>
@@ -1676,61 +1678,78 @@ function buildHistorialPDF() {
   const porDia = getFilasHistorialAgrupadas();
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   const left = 36, pageH = doc.internal.pageSize.getHeight(), pageW = doc.internal.pageSize.getWidth();
-  const cols = { fecha: 36, turno: 100, operador: 160, litros: 280, venta: 350, debito: 410, neto: 460, acumulado: 510 };
+  const right = pageW - left;
+  // Bordes de cada columna: Fecha, Turno, Operador, Cantidad, Venta, Débito, Caja, Acumulado, borde derecho.
+  const colX = [left, 100, 160, 280, 350, 410, 460, 510, right];
+  const rowH = 15;
   let y = 44;
 
-  function header() {
+  function titulo() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
     doc.text('Historial de turnos', left, y); y += 20;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    doc.text('Generado el ' + todayDDMMYYYY(), left, y); y += 18;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-    doc.text('Fecha', cols.fecha, y);
-    doc.text('Turno', cols.turno, y);
-    doc.text('Operador', cols.operador, y);
-    doc.text('Cantidad', cols.litros, y);
-    doc.text('Venta $', cols.venta, y);
-    doc.text('Débito $', cols.debito, y);
-    doc.text('Caja $', cols.neto, y);
-    doc.text('Acum. $', cols.acumulado, y);
-    y += 6;
-    doc.setDrawColor(180); doc.line(left, y, pageW - left, y); y += 12;
+    doc.text('Generado el ' + todayDDMMYYYY(), left, y); y += 16;
+  }
+
+  // Dibuja una fila completa con cuadrícula (como una planilla): un rectángulo
+  // por celda, más el texto adentro de cada una.
+  function drawRow(textos, opts) {
+    opts = opts || {};
+    const yTop = y;
+    const yBase = yTop + rowH - 5;
+    doc.setFontSize(opts.bold ? 8.5 : 8);
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    if (opts.fill) {
+      doc.setFillColor(232, 232, 232);
+      doc.rect(colX[0], yTop, right - colX[0], rowH, 'F');
+    }
+    textos.forEach((t, i) => {
+      if (!t) return;
+      const w = colX[i + 1] - colX[i] - 6;
+      doc.text(String(t), colX[i] + 3, yBase, { maxWidth: w });
+    });
+    doc.setDrawColor(170);
+    for (let i = 0; i < colX.length; i++) doc.line(colX[i], yTop, colX[i], yTop + rowH);
+    doc.line(colX[0], yTop, right, yTop);
+    doc.line(colX[0], yTop + rowH, right, yTop + rowH);
+    y += rowH;
     doc.setFont('helvetica', 'normal');
+  }
+
+  function encabezado() {
+    drawRow(['Fecha', 'Turno', 'Operador', 'Cantidad', 'Venta $', 'Débito $', 'Caja $', 'Acum. $'], { bold: true, fill: true });
   }
 
   function checkPageBreak() {
     if (y > pageH - 50) {
       doc.addPage();
       y = 44;
-      header();
+      encabezado();
     }
   }
 
-  header();
+  titulo();
+  encabezado();
 
   Object.keys(porDia).forEach(fecha => {
     const grupo = porDia[fecha];
     grupo.forEach(f => {
       checkPageBreak();
-      doc.setFontSize(8);
-      doc.text(f.fecha, cols.fecha, y);
-      doc.text(`${f.numTurno}${f.horario ? ' (' + f.horario + ')' : ''}`, cols.turno, y);
-      doc.text(f.operador, cols.operador, y, { maxWidth: 115 });
-      doc.text(f.cantidadTexto, cols.litros, y);
-      doc.text(money(f.venta), cols.venta, y);
-      doc.text(money(f.debito), cols.debito, y);
-      doc.text(money(f.neto), cols.neto, y);
-      doc.text(money(f.acumulado), cols.acumulado, y);
-      y += 14;
+      drawRow([
+        f.fecha,
+        `${f.numTurno}${f.horario ? ' (' + f.horario + ')' : ''}`,
+        f.operador,
+        f.cantidadTexto,
+        money(f.venta),
+        money(f.debito),
+        money(f.neto),
+        ''
+      ]);
     });
     checkPageBreak();
+    // El acumulado se muestra una sola vez por día, en la fila de subtotal.
     const totalDia = grupo.reduce((a, f) => a + f.neto, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Total del día', cols.operador, y);
-    doc.text(money(totalDia), cols.neto, y);
-    doc.text(money(grupo[grupo.length - 1].acumulado), cols.acumulado, y);
-    doc.setFont('helvetica', 'normal');
-    y += 18;
+    drawRow(['', 'Total del día', '', '', '', '', money(totalDia), money(grupo[grupo.length - 1].acumulado)], { bold: true, fill: true });
   });
 
   return doc;
