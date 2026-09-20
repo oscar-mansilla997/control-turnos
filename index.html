@@ -570,7 +570,8 @@ function render() {
       const t = state.historial.find(x => x.id === currentHistDetail);
       app.innerHTML = renderCierreReport(t, false);
     } else {
-      app.innerHTML = renderHistorialVistaToggle() + (historialVista === 'tabla' ? renderHistorialTabla() : renderHistorial());
+      app.innerHTML = `<button class="btn-secondary" style="margin-bottom:12px;" onclick="openCargarTurnoAnteriorModal()">+ Cargar turno anterior</button>`
+        + renderHistorialVistaToggle() + (historialVista === 'tabla' ? renderHistorialTabla() : renderHistorial());
     }
   } else if (currentTab === 'stats') {
     titleEl.textContent = 'Datos y estadísticas';
@@ -635,8 +636,17 @@ function openNuevoTurnoModal() {
       <p style="font-size:12px; color:var(--text-faint); margin:6px 2px 0;">Cambiá esta fecha si estás cargando un turno de un día anterior.</p>
     </div>
     <div class="field">
-      <label>Turno (ej. Mañana, Tarde, Noche)</label>
-      <input type="text" id="nt_horario" value="" placeholder="Mañana">
+      <label>Turno</label>
+      <select id="nt_horario_select" onchange="toggleNuevoHorarioField(this.value)">
+        <option value="Mañana">Mañana</option>
+        <option value="Tarde">Tarde</option>
+        <option value="Noche">Noche</option>
+        <option value="__otro__">+ Otro</option>
+      </select>
+    </div>
+    <div class="field" id="nt_horario_otro_wrap" style="display:none;">
+      <label>Nombre del turno</label>
+      <input type="text" id="nt_horario_otro" placeholder="Ej. Refuerzo mediodía">
     </div>
     <div class="field">
       <label>Hora de inicio</label>
@@ -672,10 +682,16 @@ function toggleNuevoOperadorField(v) {
   if (wrap) wrap.style.display = (v === '__nuevo__') ? 'block' : 'none';
 }
 
+function toggleNuevoHorarioField(v) {
+  const wrap = document.getElementById('nt_horario_otro_wrap');
+  if (wrap) wrap.style.display = (v === '__otro__') ? 'block' : 'none';
+}
+
 function confirmNuevoTurno() {
   const fechaISO = document.getElementById('nt_fecha').value;
   const fecha = isoToDDMMYYYY(fechaISO);
-  const horario = document.getElementById('nt_horario').value.trim() || 'Turno';
+  const horarioSelectVal = document.getElementById('nt_horario_select').value;
+  const horario = (horarioSelectVal === '__otro__' ? document.getElementById('nt_horario_otro').value.trim() : horarioSelectVal) || 'Turno';
   const horaInicio = document.getElementById('nt_horaInicio').value.trim() || nowHHMM();
   const dineroInicial = parseFloat(document.getElementById('nt_dineroInicial').value) || 0;
   const selectVal = document.getElementById('nt_operador_select').value;
@@ -710,6 +726,172 @@ function confirmNuevoTurno() {
   };
   saveState();
   closeModal();
+  render();
+}
+
+/* ---------------------------------------------------------
+   CARGAR TURNO ANTERIOR (desde el Historial, sin tocar el turno activo)
+--------------------------------------------------------- */
+function openCargarTurnoAnteriorModal() {
+  const mangueras = allMangueras();
+  const filasLecturas = mangueras.map(m => `
+    <div class="field" style="margin-bottom:8px;">
+      <label>${m.surtidorNombre} · ${m.combustible} (${m.unidad === 'm3' ? 'm³' : 'L'})</label>
+      <div class="field-mini-row" style="display:flex; gap:8px;">
+        <input type="number" step="0.1" id="cta_li_${m.id}" placeholder="Lectura inicial" value="0" style="flex:1;">
+        <input type="number" step="0.1" id="cta_lf_${m.id}" placeholder="Lectura final" value="0" style="flex:1;">
+      </div>
+    </div>`).join('');
+
+  const filaPuente = state.config.puenteHabilitado ? `
+    <div class="field" style="margin-bottom:8px;">
+      <label>Puente de medición (compresor)</label>
+      <div class="field-mini-row" style="display:flex; gap:8px;">
+        <input type="number" step="0.1" id="cta_pt_inicial" placeholder="Inicial" value="0" style="flex:1;">
+        <input type="number" step="0.1" id="cta_pt_final" placeholder="Final" value="0" style="flex:1;">
+      </div>
+    </div>` : '';
+
+  showModal('Cargar turno anterior', `
+    <p style="font-size:13px; color:var(--text-faint); margin-top:0;">Este turno se guarda directamente como cerrado en el historial, sin afectar el turno que tengas abierto ahora (si hay uno).</p>
+    <div class="field">
+      <label>Fecha del turno</label>
+      <input type="date" id="cta_fecha" value="${todayISO()}">
+    </div>
+    <div class="field">
+      <label>Turno</label>
+      <select id="cta_horario_select" onchange="toggleCargaTurnoHorarioField(this.value)">
+        <option value="Mañana">Mañana</option>
+        <option value="Tarde">Tarde</option>
+        <option value="Noche">Noche</option>
+        <option value="__otro__">+ Otro</option>
+      </select>
+    </div>
+    <div class="field" id="cta_horario_otro_wrap" style="display:none;">
+      <label>Nombre del turno</label>
+      <input type="text" id="cta_horario_otro" placeholder="Ej. Refuerzo mediodía">
+    </div>
+    <div class="field">
+      <label>Hora de inicio</label>
+      <input type="text" id="cta_horaInicio" value="">
+    </div>
+    <div class="field">
+      <label>Hora de fin</label>
+      <input type="text" id="cta_horaFin" value="">
+    </div>
+    <div class="field">
+      <label>Operador</label>
+      <select id="cta_operador_select" onchange="toggleCargaTurnoOperadorField(this.value)">
+        ${state.config.operadores.map(op => `<option value="${op}">${op}</option>`).join('')}
+        <option value="__nuevo__" ${state.config.operadores.length===0?'selected':''}>+ Agregar nuevo operador</option>
+      </select>
+    </div>
+    <div class="field" id="cta_operador_nuevo_wrap" style="${state.config.operadores.length?'display:none;':''}">
+      <label>Nombre del operador</label>
+      <input type="text" id="cta_operador_nuevo" placeholder="Nombre y apellido">
+    </div>
+    <div class="field">
+      <label>Dinero inicial de caja</label>
+      <input type="number" id="cta_dineroInicial" value="0">
+    </div>
+    <div class="section-title" style="margin-top:6px;">Lecturas de mangueras</div>
+    ${filasLecturas}
+    ${filaPuente ? `<div class="section-title">Puente de medición</div>${filaPuente}` : ''}
+    <div class="section-title">Caja (totales del turno)</div>
+    <div class="field">
+      <label>Otros ingresos</label>
+      <input type="number" id="cta_ingresosOtros" value="0">
+    </div>
+    <div class="field">
+      <label>Retiros de caja</label>
+      <input type="number" id="cta_retiros" value="0">
+    </div>
+    <div class="field">
+      <label>Gastos</label>
+      <input type="number" id="cta_gastos" value="0">
+    </div>
+    <div class="field">
+      <label>Débito / tarjeta</label>
+      <input type="number" id="cta_debito" value="0">
+    </div>
+    <div class="field">
+      <label>Efectivo contado (al cierre)</label>
+      <input type="number" id="cta_efectivoContado" placeholder="Dejar vacío si no lo sabés">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmCargarTurnoAnterior()">Guardar en el historial</button>
+    </div>
+  `);
+}
+
+function toggleCargaTurnoOperadorField(v) {
+  const wrap = document.getElementById('cta_operador_nuevo_wrap');
+  if (wrap) wrap.style.display = (v === '__nuevo__') ? 'block' : 'none';
+}
+
+function toggleCargaTurnoHorarioField(v) {
+  const wrap = document.getElementById('cta_horario_otro_wrap');
+  if (wrap) wrap.style.display = (v === '__otro__') ? 'block' : 'none';
+}
+
+function confirmCargarTurnoAnterior() {
+  const fechaISO = document.getElementById('cta_fecha').value;
+  const fecha = isoToDDMMYYYY(fechaISO);
+  const horarioSelectVal = document.getElementById('cta_horario_select').value;
+  const horario = (horarioSelectVal === '__otro__' ? document.getElementById('cta_horario_otro').value.trim() : horarioSelectVal) || 'Turno';
+  const horaInicio = document.getElementById('cta_horaInicio').value.trim() || '';
+  const horaFin = document.getElementById('cta_horaFin').value.trim() || '';
+  const dineroInicial = parseFloat(document.getElementById('cta_dineroInicial').value) || 0;
+  const selectVal = document.getElementById('cta_operador_select').value;
+  let operador = selectVal;
+  if (selectVal === '__nuevo__') {
+    operador = document.getElementById('cta_operador_nuevo').value.trim();
+  }
+  if (!operador) operador = 'Sin asignar';
+  if (!state.config.operadores.includes(operador)) {
+    state.config.operadores.push(operador);
+  }
+  const lecturas = {};
+  allMangueras().forEach(m => {
+    const inicial = parseFloat(document.getElementById('cta_li_' + m.id).value) || 0;
+    const final = parseFloat(document.getElementById('cta_lf_' + m.id).value) || 0;
+    lecturas[m.id] = { inicial, final };
+  });
+  const puente = state.config.puenteHabilitado
+    ? { inicial: parseFloat(document.getElementById('cta_pt_inicial').value) || 0, final: parseFloat(document.getElementById('cta_pt_final').value) || 0 }
+    : null;
+
+  const movimientos = [];
+  const ingresosOtros = parseFloat(document.getElementById('cta_ingresosOtros').value) || 0;
+  const retiros = parseFloat(document.getElementById('cta_retiros').value) || 0;
+  const gastos = parseFloat(document.getElementById('cta_gastos').value) || 0;
+  const debito = parseFloat(document.getElementById('cta_debito').value) || 0;
+  if (ingresosOtros > 0) movimientos.push({ id: uid('mv'), tipo:'ingreso', monto: ingresosOtros, concepto:'Otros ingresos (carga retroactiva)', hora: horaFin || horaInicio || '', usuario: operador });
+  if (retiros > 0) movimientos.push({ id: uid('mv'), tipo:'retiro', monto: retiros, concepto:'Retiro (carga retroactiva)', hora: horaFin || horaInicio || '', usuario: operador });
+  if (gastos > 0) movimientos.push({ id: uid('mv'), tipo:'gasto', monto: gastos, concepto:'Gastos (carga retroactiva)', hora: horaFin || horaInicio || '', usuario: operador });
+  if (debito > 0) movimientos.push({ id: uid('mv'), tipo:'debito', monto: debito, concepto:'Débito / tarjeta (carga retroactiva)', hora: horaFin || horaInicio || '', usuario: operador });
+
+  const efRaw = document.getElementById('cta_efectivoContado').value;
+  const efectivoContado = efRaw === '' ? null : (parseFloat(efRaw) || 0);
+
+  const turno = {
+    id: uid('t'),
+    fecha,
+    horario, horaInicio, horaFin,
+    operador,
+    dineroInicial,
+    lecturas,
+    puente,
+    precios: { ...state.config.precios },
+    movimientos,
+    efectivoContado,
+    cerrado: true
+  };
+  state.historial.push(turno);
+  saveState();
+  closeModal();
+  currentHistDetail = null;
   render();
 }
 
