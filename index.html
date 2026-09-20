@@ -1603,7 +1603,13 @@ function getFilasHistorialAgrupadas() {
     if (!porDia[f.fecha]) porDia[f.fecha] = [];
     porDia[f.fecha].push(f);
   });
-  return porDia;
+  // El acumulado se calcula en orden cronológico (de más viejo a más nuevo),
+  // pero se muestra con el día más reciente primero, como el resto de la app.
+  const porDiaOrdenado = {};
+  Object.keys(porDia).reverse().forEach(fecha => {
+    porDiaOrdenado[fecha] = porDia[fecha];
+  });
+  return porDiaOrdenado;
 }
 
 function renderHistorialTabla() {
