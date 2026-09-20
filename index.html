@@ -1576,7 +1576,7 @@ function numeroTurnoPorHorario(horario, ordenEnElDia) {
 
 // Arma las filas del historial agrupadas por día, en orden cronológico,
 // con el acumulado corrido. La usan tanto la tabla en pantalla como el PDF.
-function getFilasHistorialAgrupadas() {
+function getFilasHistorialAgrupadas(masRecientePrimero = true) {
   const cronologico = historialCronologico();
   const contadorPorDia = {};
   let acumulado = 0;
@@ -1608,8 +1608,10 @@ function getFilasHistorialAgrupadas() {
     if (!porDia[f.fecha]) porDia[f.fecha] = [];
     porDia[f.fecha].push(f);
   });
-  // El acumulado se calcula en orden cronológico (de más viejo a más nuevo),
-  // pero se muestra con el día más reciente primero, como el resto de la app.
+  // El acumulado siempre se calcula en orden cronológico (de más viejo a más
+  // nuevo). Para mostrarlo, la app en pantalla prefiere el día más reciente
+  // primero; el PDF impreso, en cambio, se lee de más viejo a más nuevo.
+  if (!masRecientePrimero) return porDia;
   const porDiaOrdenado = {};
   Object.keys(porDia).reverse().forEach(fecha => {
     porDiaOrdenado[fecha] = porDia[fecha];
@@ -1675,7 +1677,7 @@ function renderHistorialTabla() {
 
 /* PDF con la tabla completa del historial (todos los turnos, agrupados por día, con acumulado) */
 function buildHistorialPDF() {
-  const porDia = getFilasHistorialAgrupadas();
+  const porDia = getFilasHistorialAgrupadas(false);
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   const left = 36, pageH = doc.internal.pageSize.getHeight(), pageW = doc.internal.pageSize.getWidth();
   const right = pageW - left;
