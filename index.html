@@ -1584,7 +1584,10 @@ function getFilasHistorialAgrupadas() {
     contadorPorDia[t.fecha] = (contadorPorDia[t.fecha] || 0) + 1;
     const numTurno = numeroTurnoPorHorario(t.horario, contadorPorDia[t.fecha]);
     const tot = calcTotales(t);
-    acumulado += tot.ventaSurtidores;
+    // Neto = lo que entra en la caja en efectivo: venta bruta menos lo que
+    // se cobró con débito/tarjeta (eso no es efectivo físico).
+    const neto = tot.ventaSurtidores - tot.debito;
+    acumulado += neto;
     const porUnidad = cantidadesPorUnidadTurno(t);
     return {
       fecha: t.fecha,
@@ -1594,6 +1597,8 @@ function getFilasHistorialAgrupadas() {
       litros: litrosTotalTurno(t),
       cantidadTexto: textoCantidadUnidades(porUnidad),
       venta: tot.ventaSurtidores,
+      debito: tot.debito,
+      neto,
       acumulado
     };
   });
@@ -1627,13 +1632,15 @@ function renderHistorialTabla() {
         <td>${f.operador}</td>
         <td class="num">${f.cantidadTexto}</td>
         <td class="num">${money(f.venta)}</td>
+        <td class="num">${money(f.debito)}</td>
+        <td class="num">${money(f.neto)}</td>
         <td class="num">${money(f.acumulado)}</td>
       </tr>
     `).join('');
-    const totalDia = grupo.reduce((a, f) => a + f.venta, 0);
+    const totalDia = grupo.reduce((a, f) => a + f.neto, 0);
     const filaSubtotal = `
       <tr class="fila-subtotal">
-        <td colspan="4">Total del día</td>
+        <td colspan="6">Total del día</td>
         <td class="num">${money(totalDia)}</td>
         <td class="num">${money(grupo[grupo.length - 1].acumulado)}</td>
       </tr>
@@ -1651,6 +1658,8 @@ function renderHistorialTabla() {
             <th>Operador</th>
             <th>Cantidad</th>
             <th>Venta $</th>
+            <th>Débito $</th>
+            <th>Caja $</th>
             <th>Acumulado $</th>
           </tr>
         </thead>
@@ -1667,7 +1676,7 @@ function buildHistorialPDF() {
   const porDia = getFilasHistorialAgrupadas();
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   const left = 36, pageH = doc.internal.pageSize.getHeight(), pageW = doc.internal.pageSize.getWidth();
-  const cols = { fecha: 36, turno: 110, operador: 175, litros: 320, venta: 400, acumulado: 480 };
+  const cols = { fecha: 36, turno: 100, operador: 160, litros: 280, venta: 350, debito: 410, neto: 460, acumulado: 510 };
   let y = 44;
 
   function header() {
@@ -1675,13 +1684,15 @@ function buildHistorialPDF() {
     doc.text('Historial de turnos', left, y); y += 20;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
     doc.text('Generado el ' + todayDDMMYYYY(), left, y); y += 18;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
     doc.text('Fecha', cols.fecha, y);
     doc.text('Turno', cols.turno, y);
     doc.text('Operador', cols.operador, y);
     doc.text('Cantidad', cols.litros, y);
     doc.text('Venta $', cols.venta, y);
-    doc.text('Acumulado $', cols.acumulado, y);
+    doc.text('Débito $', cols.debito, y);
+    doc.text('Caja $', cols.neto, y);
+    doc.text('Acum. $', cols.acumulado, y);
     y += 6;
     doc.setDrawColor(180); doc.line(left, y, pageW - left, y); y += 12;
     doc.setFont('helvetica', 'normal');
@@ -1701,20 +1712,22 @@ function buildHistorialPDF() {
     const grupo = porDia[fecha];
     grupo.forEach(f => {
       checkPageBreak();
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.text(f.fecha, cols.fecha, y);
       doc.text(`${f.numTurno}${f.horario ? ' (' + f.horario + ')' : ''}`, cols.turno, y);
-      doc.text(f.operador, cols.operador, y, { maxWidth: 140 });
+      doc.text(f.operador, cols.operador, y, { maxWidth: 115 });
       doc.text(f.cantidadTexto, cols.litros, y);
       doc.text(money(f.venta), cols.venta, y);
+      doc.text(money(f.debito), cols.debito, y);
+      doc.text(money(f.neto), cols.neto, y);
       doc.text(money(f.acumulado), cols.acumulado, y);
       y += 14;
     });
     checkPageBreak();
-    const totalDia = grupo.reduce((a, f) => a + f.venta, 0);
+    const totalDia = grupo.reduce((a, f) => a + f.neto, 0);
     doc.setFont('helvetica', 'bold');
     doc.text('Total del día', cols.operador, y);
-    doc.text(money(totalDia), cols.venta, y);
+    doc.text(money(totalDia), cols.neto, y);
     doc.text(money(grupo[grupo.length - 1].acumulado), cols.acumulado, y);
     doc.setFont('helvetica', 'normal');
     y += 18;
