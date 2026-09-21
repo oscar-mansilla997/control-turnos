@@ -1,7 +1,8 @@
-// Service worker mínimo: cachea el shell de la app para que abra rápido
-// y funcione sin conexión. Los datos de turnos siguen guardándose en
-// localStorage, no acá.
-const CACHE_NAME = 'control-turnos-v1';
+// Service worker mínimo: cachea el shell de la app para que funcione sin
+// conexión. Los datos de turnos siguen guardándose en localStorage, no acá.
+// Estrategia: red primero (para traer siempre lo último subido a GitHub),
+// y si no hay internet, usa la copia guardada.
+const CACHE_NAME = 'control-turnos-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -21,19 +22,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // solo cacheamos pedidos del mismo origen (el propio sitio);
-  // todo lo externo (fuentes, jsPDF, Tesseract) pasa directo a la red.
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== location.origin) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request).then((response) => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request).then((response) => {
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+      }
+      return response;
+    }).catch(() => caches.match(event.request))
   );
 });
